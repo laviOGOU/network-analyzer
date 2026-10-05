@@ -262,6 +262,28 @@
     <pre class="hex" id="paquet-hex"></pre>
   </div>
 
+  <div class="paquet-detail" id="recit-detail" hidden aria-labelledby="recit-titre">
+    <div class="detail-entete">
+      <h3 id="recit-titre">Récit de la conversation</h3>
+      <button type="button" class="bouton bouton--fantome" id="recit-fermer">Fermer</button>
+    </div>
+    <p class="aide" id="recit-resume"></p>
+
+    <h4 class="couches-titre">Chronologie</h4>
+    <p class="aide">
+      Seuls les événements sont retenus — ouverture, acceptation, fermeture, rupture.
+      Quarante échanges de données ne racontent rien de plus que le premier.
+    </p>
+    <div id="recit-moments"></div>
+
+    <h4 class="couches-titre">Ce qui s'est passé, en français</h4>
+    <p class="aide">
+      Un fait est ce qui a été mesuré. Une lecture est ce qui en a été déduit, avec le
+      critère qui l'a déclenchée. Les deux ne sont jamais mélangés dans une même phrase.
+    </p>
+    <div id="recit-phrases"></div>
+  </div>
+
   <section aria-labelledby="titre-paquets">
     <div class="titre-section--ligne">
       <h2 id="titre-paquets" class="titre-section">Packets</h2>
@@ -367,6 +389,9 @@
     <td>
       <button type="button" class="bouton bouton-discret bouton-detail">
         Expliquer
+      </button>
+      <button type="button" class="bouton bouton-discret bouton-recit">
+        Raconter
       </button>
     </td>
   </tr>

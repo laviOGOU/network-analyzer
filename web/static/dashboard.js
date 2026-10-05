@@ -77,6 +77,19 @@
 
   function detailLisible(paquet) {
     const detail = paquet.details || {};
+
+    // Le nom du serveur visé, lu en clair dans le ClientHello TLS. C'est ce qui répond à
+    // « quel site cette machine contacte-t-elle ? » pour une session que l'outil ne
+    // déchiffre pas — et l'outil ne la déchiffre pas, par principe.
+    if (detail.tls_sni) {
+      return `HTTPS vers ${detail.tls_sni}`;
+    }
+    if (detail.http_hote) {
+      const methode = detail.http_methode ? `${detail.http_methode} ` : "";
+      const chemin = detail.http_chemin ? detail.http_chemin : "";
+      const code = detail.http_code ? ` → ${detail.http_code}` : "";
+      return `HTTP ${methode}${detail.http_hote}${chemin}${code}`;
+    }
     if (detail.dns_question) {
       return detail.dns_reponse
         ? `réponse DNS · ${detail.dns_question}`
@@ -88,6 +101,107 @@
     if (detail.tronque) return "paquet tronqué";
     return "";
   }
+
+
+  /* ------------------------------------------------- recit d'une conversation */
+
+  /**
+   * Raconte une conversation : la chronologie des événements, puis le récit.
+   *
+   * Chaque phrase est présentée selon son genre — « fait observé » ou « lecture » — avec
+   * les mêmes blocs que les explications. La distinction ne repose pas sur la couleur
+   * seule : l'intitulé est écrit, sinon la moitié des lecteurs ne verrait pas la
+   * différence.
+   */
+  async function raconterCommunication(communication) {
+    const panneau = document.getElementById("recit-detail");
+    const resume = document.getElementById("recit-resume");
+    const conteneurMoments = document.getElementById("recit-moments");
+    const conteneurPhrases = document.getElementById("recit-phrases");
+    if (!panneau || !conteneurMoments || !conteneurPhrases) return;
+
+    conteneurMoments.textContent = "";
+    conteneurPhrases.textContent = "";
+    resume.textContent = "Lecture de la conversation…";
+    panneau.hidden = false;
+
+    const enTete = document.querySelector(".col-extremite-b") ? "" : "";
+    let donnees = null;
+    try {
+      const reponse = await fetch(`/api/v1/flows/recit?cle=${encodeURIComponent(communication.cle)}`,
+                                  { headers: { Accept: "application/json" } });
+      if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
+      donnees = await reponse.json();
+    } catch (erreur) {
+      resume.textContent = `Le récit n'a pas pu être obtenu (${erreur.message}).`;
+      return;
+    }
+
+    const c = donnees.communication || communication;
+    const quelle = c.nom_b || c.nom_a || c.ip_b || c.ip_a || "cette conversation";
+    resume.textContent = `${c.protocole || "?"} · ${quelle} · `
+      + `${donnees.paquets_analyses} paquet(s) relus pour ce récit`;
+
+    if (!donnees.moments || !donnees.moments.length) {
+      const vide = document.createElement("p");
+      vide.className = "aide";
+      vide.textContent = donnees.paquets_analyses
+        ? "Aucun événement n'a été observé dans les paquets relus : ni ouverture, ni "
+          + "fermeture, ni rupture. La conversation était sans doute déjà en cours."
+        : "Les paquets de cette conversation n'ont pas été retrouvés dans la fenêtre relue.";
+      conteneurMoments.appendChild(vide);
+    } else {
+      donnees.moments.forEach((moment) => {
+        const ligne = document.createElement("div");
+        ligne.className = "recit-moment";
+
+        const delai = document.createElement("span");
+        delai.className = "recit-moment-delai";
+        delai.textContent = moment.depuis_debut_s === null || moment.depuis_debut_s === undefined
+          ? "—" : `+ ${String(moment.depuis_debut_s).replace(".", ",")} s`;
+
+        const nom = document.createElement("span");
+        nom.className = "recit-moment-nom";
+        nom.textContent = moment.moment;
+
+        const quoi = document.createElement("span");
+        quoi.textContent = moment.description || "";
+
+        ligne.appendChild(delai);
+        ligne.appendChild(nom);
+        ligne.appendChild(quoi);
+        conteneurMoments.appendChild(ligne);
+      });
+    }
+
+    (donnees.recit || []).forEach((phrase) => {
+      const bloc = document.createElement("div");
+      bloc.className = phrase.genre === "fait" ? "bloc bloc-faits" : "bloc bloc-interpretation";
+
+      const genre = document.createElement("span");
+      genre.className = "recit-genre";
+      genre.textContent = phrase.genre === "fait" ? "fait observé" : "lecture";
+
+      const texte = document.createElement("span");
+      texte.textContent = phrase.texte;
+
+      bloc.appendChild(genre);
+      bloc.appendChild(texte);
+      conteneurPhrases.appendChild(bloc);
+    });
+  }
+
+  function fermerRecit() {
+    const panneau = document.getElementById("recit-detail");
+    if (panneau) panneau.hidden = true;
+  }
+
+  // Ces deux fonctions sont définies dans la portée du module principal et appelées depuis
+  // un bloc séparé : sans cette exposition, le clic ne ferait rien, sans erreur visible.
+  // C'est le même piège que `formaterOctets` — le second module ne voit pas la fermeture
+  // du premier.
+  window.raconterCommunication = raconterCommunication;
+  window.fermerRecit = fermerRecit;
 
   /* ---------------------------------------------------------------- rendu */
 
@@ -440,6 +554,12 @@
       // impossible la vérification de ce qui a été vu.
       remplirExtremite(ligne.querySelector(".col-extremite-a"), c.ip_a, c.port_a, c.nom_a);
       remplirExtremite(ligne.querySelector(".col-extremite-b"), c.ip_b, c.port_b, c.nom_b);
+
+      // La clé est posée sur le bouton : le tableau est reconstruit à chaque
+      // rafraîchissement, donc on garde de quoi retrouver la conversation au clic plutôt
+      // qu'un élément du document qui aura disparu.
+      const boutonRecit = ligne.querySelector(".bouton-recit");
+      if (boutonRecit) boutonRecit.dataset.cle = c.cle;
       ligne.querySelector(".col-echanges").textContent =
         `${c.paquets_a_vers_b} → ${c.paquets_b_vers_a}`;
       ligne.querySelector(".col-volume").textContent =
@@ -1093,6 +1213,31 @@ function signalerCriteresEcartes(champs) {
   zone.fermer.addEventListener("click", fermer);
   document.addEventListener("keydown", (evenement) => {
     if (evenement.key === "Escape" && !zone.panneau.hidden) fermer();
+  });
+})();
+
+/* Le recit d'une conversation : obtention a la demande, jamais a chaque rafraichissement du
+   tableau de bord. Raconter demande de relire les paquets de la conversation — ce n'est pas
+   quelque chose qu'on fait toutes les trois secondes pour toutes les lignes. */
+(() => {
+  const panneau = document.getElementById("recit-detail");
+  const boutonFermer = document.getElementById("recit-fermer");
+  if (!panneau || !boutonFermer) return;
+
+  document.addEventListener("click", (evenement) => {
+    const bouton = evenement.target.closest(".bouton-recit");
+    if (!bouton) return;
+    const cle = bouton.dataset.cle;
+    if (!cle) return;
+    raconterCommunication({ cle: cle }).then(() => {
+      panneau.scrollIntoView({ block: "nearest" });
+      boutonFermer.focus();
+    });
+  });
+
+  boutonFermer.addEventListener("click", fermerRecit);
+  document.addEventListener("keydown", (evenement) => {
+    if (evenement.key === "Escape" && !panneau.hidden) fermerRecit();
   });
 })();
 

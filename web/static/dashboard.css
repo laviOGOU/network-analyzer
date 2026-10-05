@@ -431,6 +431,52 @@
 
 .bloc-faits { border-left-color: var(--accent); background: var(--accent-doux); }
 .bloc-interpretation { border-left-color: var(--attention); background: var(--surface-2); }
+
+/* ------------------------------------------------------------------ récit d'une conversation
+   Un fait et une lecture ne se présentent pas de la même façon : le lecteur doit pouvoir
+   dire, à chaque ligne, ce qui a été observé et ce qui a été pensé. La distinction ne
+   repose pas sur la couleur seule — chaque bloc porte son intitulé écrit. */
+.recit-phrase {
+  border-left: 3px solid var(--bordure);
+  padding: .5rem .75rem;
+  margin: 0 0 .4rem;
+  background: var(--surface-2);
+  border-radius: 0 .3rem .3rem 0;
+  overflow-wrap: anywhere;
+}
+
+.recit-phrase--fait { border-left-color: var(--primaire); }
+.recit-phrase--lecture { border-left-color: var(--attention); }
+
+.recit-genre {
+  display: block;
+  font-size: .72rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  margin-bottom: .15rem;
+}
+
+.recit-phrase--fait .recit-genre { color: var(--primaire); }
+.recit-phrase--lecture .recit-genre { color: var(--attention); }
+
+.recit-moment {
+  display: flex;
+  gap: .75rem;
+  align-items: baseline;
+  padding: .3rem 0;
+  border-bottom: 1px solid var(--bordure);
+}
+
+.recit-moment:last-child { border-bottom: 0; }
+
+.recit-moment-delai {
+  font-variant-numeric: tabular-nums;
+  min-width: 5.5rem;
+  color: var(--texte-doux);
+  font-size: .82rem;
+}
+
+.recit-moment-nom { font-weight: 600; min-width: 7rem; }
 .bloc-simple { border-left-color: var(--succes); background: var(--surface-2); }
 
 .bloc-intitule {

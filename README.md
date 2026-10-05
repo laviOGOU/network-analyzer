@@ -280,7 +280,8 @@ tiers ne peut renseigner et qui décriraient votre réseau local à un tiers.
 
 ## Raconter une conversation
 
-`GET /api/v1/flows/recit?cle=...` rend la **chronologie** des événements d'une conversation —
+Dans l'interface, un bouton **Raconter** sur chaque ligne de communication ouvre le récit.
+Côté API, `GET /api/v1/flows/recit?cle=...` rend la **chronologie** des événements d'une conversation —
 ouverture, acceptation, fermeture, rupture, avec leur délai — puis son **récit** en français.
 
     +   0.0 s  ouverture    demande d'ouverture (SYN)
@@ -291,6 +292,10 @@ Chaque phrase du récit porte son **genre** : `fait` ou `lecture`. « 6,3 ko ont
 échangés » est un fait ; « c'est le profil d'une consultation » est une lecture, présentée
 comme telle avec le critère qui l'a déclenchée. Un lecteur peut dire, à chaque ligne, ce qui
 a été observé et ce qui a été pensé.
+
+Le récit n'est calculé **qu'à la demande** : le tableau de bord se rafraîchit toutes les
+trois secondes, et relire les paquets de cent conversations à ce rythme serait un gaspillage
+invisible.
 
 **L'incertitude est écrite, pas contournée.** Une conversation dont la capture n'a pas vu le
 début est annoncée comme telle, et la phrase « cela ne veut pas dire qu'elle est encore

@@ -1056,3 +1056,63 @@ forme relevée sur une réponse réelle de l'API.
 La chronologie peut afficher **deux fois** une acceptation lorsque deux paquets portent le
 même horodatage : le dédoublonnage des événements répétés n'est pas encore fiable. C'est
 cosmétique — le récit reste juste — mais c'est faux, et c'est noté comme tel.
+
+
+---
+
+# Lot B — L'affichage
+
+## Ce qui a été ajouté
+
+**Un bouton « Raconter »** sur chaque ligne de communication. Il ouvre un panneau qui montre
+la chronologie des événements puis le récit, **chaque phrase portant son genre** : « fait
+observé » ou « lecture ». La distinction ne repose pas sur la couleur seule — l'intitulé est
+écrit, sinon une partie des lecteurs ne verrait pas la différence.
+
+**« HTTPS vers <nom> »** dans la colonne « Détail » d'un paquet, dès qu'un ClientHello a
+livré son SNI. Et « HTTP GET <hôte><chemin> → <code> » pour un échange en clair.
+
+**L'export CSV suit le filtre courant** : on exporte ce que l'on voit.
+
+## Pourquoi ces choix
+
+**Le récit ne se calcule pas à chaque rafraîchissement.** Le tableau de bord se rafraîchit
+toutes les trois secondes ; raconter demande de relire les paquets d'une conversation. Le
+récit est donc obtenu **à la demande**, au clic — le tableau de bord reste fluide, et le
+travail se fait quand quelqu'un le demande.
+
+**La clé de la conversation est posée sur le bouton**, pas gardée dans un tableau à part. Le
+tableau est reconstruit à chaque rafraîchissement : un élément du document disparaît, et un
+index calculé au moment du clic désignerait la mauvaise ligne si une communication est
+apparue entre-temps.
+
+**Les blocs « fait » et « lecture » réemploient les classes déjà employées par les
+explications.** Une même idée se présente partout de la même façon, et une correction de
+couleur n'a qu'un endroit à changer.
+
+## Deux questions de défense
+
+**1. Pourquoi le récit n'est-il pas calculé d'avance, comme le reste ?**
+
+Parce que le coût n'est pas le même. Compter des paquets par protocole se fait une fois pour
+toutes ; raconter une conversation demande de retrouver ses paquets et de les parcourir. Le
+faire toutes les trois secondes pour cent lignes serait un gaspillage invisible — et un
+tableau de bord qui rame sans qu'on sache pourquoi. À la demande, le travail se fait pour la
+seule conversation qu'on regarde.
+
+**2. Le panneau dit « aucun événement observé ». Est-ce une erreur ?**
+
+Non, et c'est une information. Cela veut dire qu'aucun SYN, FIN ou RST n'a été vu dans les
+paquets relus : la conversation était déjà en cours au début de la fenêtre analysée. Le
+récit l'écrit explicitement plutôt que de laisser croire à une absence de trafic. C'est la
+même règle que partout ailleurs : ce qui n'a pas été vu est dit comme non vu, jamais comblé
+par une supposition.
+
+## Un défaut trouvé ici aussi
+
+`raconterCommunication` était défini dans la portée du module principal et appelé depuis un
+bloc séparé : le clic n'aurait **rien fait, sans la moindre erreur visible**. C'est le même
+piège que `formaterOctets` au lot A — le second module ne voit pas la fermeture du premier.
+Les deux fonctions sont maintenant exposées explicitement, avec le commentaire qui explique
+pourquoi. **Une interface qui ne fait rien en silence est plus difficile à diagnostiquer
+qu'une interface qui plante.**

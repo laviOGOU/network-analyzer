@@ -320,6 +320,32 @@ function verifier(intitule, condition, precision = "") {
   verifier("l'export CSV ne contient aucune charge utile",
     !/payload|contenu_du_message/i.test(corps));
 
+  // Le recit d'une conversation. On clique sur la premiere communication et on attend que
+  // le panneau se remplisse : sans attente conditionnelle, on mesurerait le vide.
+  const boutonRecit = await page.$("#corps-communications tr .bouton-recit");
+  if (boutonRecit) {
+    await boutonRecit.click();
+    await page.waitForSelector("#recit-phrases .bloc", { timeout: 25000 }).catch(() => {});
+    const recit = await page.evaluate(() => ({
+      visible: !document.getElementById("recit-detail").hidden,
+      phrases: document.querySelectorAll("#recit-phrases .bloc").length,
+      faits: document.querySelectorAll("#recit-phrases .bloc-faits").length,
+      lectures: document.querySelectorAll("#recit-phrases .bloc-interpretation").length,
+      moments: document.querySelectorAll("#recit-moments .recit-moment").length,
+      resume: (document.getElementById("recit-resume").textContent || "").slice(0, 70),
+    }));
+    verifier("le recit s'affiche : des faits, et des lectures annoncees comme telles",
+             recit.visible && recit.faits > 0,
+             `phrases=${recit.phrases} faits=${recit.faits} lectures=${recit.lectures} `
+             + `moments=${recit.moments} · ${recit.resume}`);
+    await page.keyboard.press("Escape");
+    await page.waitForSelector("#recit-detail", { state: "hidden", timeout: 5000 }).catch(() => {});
+    verifier("Echap referme le recit",
+             await page.evaluate(() => document.getElementById("recit-detail").hidden), "");
+  } else {
+    verifier("le bouton Raconter est present sur les communications", false, "aucun bouton");
+  }
+
   verifier("aucune erreur JavaScript", erreursReelles.length === 0,
     erreursReelles.slice(0, 3).join(" | "));
 
