@@ -114,13 +114,20 @@ class Stockage:
             self._premier = self._premier or horodatage
             self._dernier = horodatage
 
-    def enregistrer_communications(self, communications: list[dict[str, Any]]) -> int:
+    def enregistrer_communications(self, session: str,
+                                   communications: list[dict[str, Any]]) -> int:
         """Refond les communications reçues, par clé.
 
-        On ne conserve pas tout indéfiniment : garder un nombre borné, les plus récentes
-        d'abord. Un tableau de bord vivant n'a pas besoin de l'intégralité de l'historique,
-        et laisser grossir le dictionnaire ferait exactement ce qu'on reproche aux
-        programmes qui fuient — en silence.
+        Pourquoi la session fait partie de l'index : deux agents — ou deux captures
+        successives — peuvent observer la même conversation. Indexer sur la seule clé
+        ferait que la seconde écraserait la première, et le tableau de bord attribuerait à
+        une capture les chiffres d'une autre. Le schéma SQL déclare la même contrainte
+        (unicité sur session et clé) : les deux doivent dire la même chose.
+
+        On ne conserve pas tout indéfiniment : un nombre borné, les plus récentes d'abord.
+        Un tableau de bord vivant n'a pas besoin de l'intégralité de l'historique, et
+        laisser grossir le dictionnaire ferait exactement ce qu'on reproche aux programmes
+        qui fuient — en silence.
         """
         if not communications:
             return 0
@@ -129,9 +136,10 @@ class Stockage:
                 cle = communication.get("cle")
                 if not cle:
                     continue
-                if cle not in self._communications:
+                index = f"{session}|{cle}"
+                if index not in self._communications:
                     self._communications_vues += 1
-                self._communications[cle] = communication
+                self._communications[index] = {**communication, "session": session}
 
             # Élagage : on garde les plus récentes, et l'on compte celles qui sortent
             # séparément (`_communications_vues` ne redescend jamais).
@@ -189,12 +197,14 @@ class Stockage:
         return list(reversed(paquets))[:max(0, limite)]
 
     def communications(self, limite: int = 100, etat: str | None = None,
-                       protocole: str | None = None,
+                       protocole: str | None = None, session: str | None = None,
                        recherche: str | None = None) -> list[dict[str, Any]]:
         """Communications conservées, la plus récente d'abord."""
         with self._verrou:
             liste = list(self._communications.values())
 
+        if session:
+            liste = [c for c in liste if c.get("session") == session]
         if etat:
             liste = [c for c in liste if (c.get("etat") or "").lower() == etat.lower()]
         if protocole:

@@ -49,6 +49,7 @@ def lister_communications(
     limite: Annotated[int, Query(ge=1, le=1000)] = 100,
     etat: Annotated[str | None, Query(max_length=32, description="tentative, établie, fermée…")] = None,
     protocole: Annotated[str | None, Query(max_length=32)] = None,
+    session: Annotated[str | None, Query(max_length=64, description="Identifiant de session")] = None,
     recherche: Annotated[str | None, Query(max_length=64, description="IP, port, état")] = None,
 ) -> dict[str, Any]:
     """Communications regroupées, la plus récente d'abord.
@@ -57,8 +58,8 @@ def lister_communications(
     affiché, pas seulement stocké : une communication vue en cours de route ne peut pas
     être présentée avec la même assurance qu'une ouverture observée en entier.
     """
-    communications = stockage.communications(limite=limite, etat=etat,
-                                             protocole=protocole, recherche=recherche)
+    communications = stockage.communications(limite=limite, etat=etat, protocole=protocole,
+                                             session=session, recherche=recherche)
     return {"communications": communications, "affichees": len(communications),
             "statistiques": stockage.statistiques()}
 

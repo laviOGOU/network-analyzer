@@ -45,7 +45,7 @@ def ingerer(
 
     acceptes = stockage.enregistrer_lot(lot.session, lot.agent, propres)
     communications = stockage.enregistrer_communications(
-        [communication.model_dump() for communication in lot.communications])
+        lot.session, [communication.model_dump() for communication in lot.communications])
     origine = request.client.host if request.client else "inconnue"
     logger.info("Lot reçu : %d paquets de %s (agent %s, origine %s)",
                 acceptes, lot.session, lot.agent, origine)

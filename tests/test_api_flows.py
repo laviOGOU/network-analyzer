@@ -129,6 +129,34 @@ def test_communications_separees_par_cle(client):
 # --------------------------------------------------------------------------- #
 #  Filtres
 # --------------------------------------------------------------------------- #
+def test_deux_sessions_ne_se_melangent_pas(client):
+    """Deux captures observant la même conversation doivent rester distinctes.
+
+    Indexer sur la seule clé ferait écraser la première par la seconde : le tableau de
+    bord attribuerait à une capture les chiffres d'une autre.
+    """
+    commun = dict(cle="TCP|a|b", protocole="TCP", ip_a="10.0.0.5", ip_b="93.184.216.34",
+                  port_a=49703, port_b=443, initiateur="10.0.0.5")
+    client.post("/api/v1/ingest", headers={"X-Agent-Token": JETON},
+                json={"session": "capture-du-matin", "agent": "poste", "paquets": [paquet()],
+                      "communications": [communication(**commun)]})
+    client.post("/api/v1/ingest", headers={"X-Agent-Token": JETON},
+                json={"session": "capture-du-soir", "agent": "poste", "paquets": [paquet()],
+                      "communications": [communication(paquets_a_vers_b=9, paquets_b_vers_a=4,
+                                                      paquets_total=13, octets_a_vers_b=900,
+                                                      octets_b_vers_a=400, octets_total=1300,
+                                                      **commun)]})
+
+    toutes = client.get("/api/v1/flows").json()
+    matin = client.get("/api/v1/flows?session=capture-du-matin").json()
+
+    # Deux lignes, et non une seule écrasée par la seconde capture.
+    assert toutes["affichees"] == 2
+    assert matin["affichees"] == 1
+    assert matin["communications"][0]["paquets_total"] == 3
+    assert matin["communications"][0]["session"] == "capture-du-matin"
+
+
 def test_filtre_par_etat(client):
     envoyer(client, communications=[
         communication(),
