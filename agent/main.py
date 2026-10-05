@@ -22,6 +22,7 @@ capture et l'analyse fonctionnent avant de mettre en jeu un backend ou un jeton.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import logging
 import os
 import signal
@@ -39,6 +40,7 @@ if str(RACINE) not in sys.path:
 
 from agent import capture as mod_capture          # noqa: E402
 from agent import detection as mod_detection      # noqa: E402
+from agent import replay as mod_replay            # noqa: E402
 from agent import flows as mod_flows              # noqa: E402
 from agent import sender as mod_sender            # noqa: E402
 
@@ -55,6 +57,13 @@ def construire_analyseur() -> argparse.ArgumentParser:
                            help="liste les interfaces réseau disponibles, puis quitte")
     analyseur.add_argument("--interface", "-i", default=None,
                            help="interface à écouter : nom (« Wi-Fi »), description ou adresse")
+    analyseur.add_argument("--pcap", default=None,
+                           help="Rejouer un fichier .pcap au lieu de capturer en direct")
+    analyseur.add_argument("--vitesse", type=float, default=0.0,
+                           help="Vitesse de rejeu : 0 = aussi vite que possible (défaut), "
+                                "1 = rythme réel, 10 = dix fois plus vite")
+    analyseur.add_argument("--inspecter", action="store_true",
+                           help="Décrire le fichier .pcap sans le rejouer")
     analyseur.add_argument("--filtre", "-f", default="",
                            help="filtre BPF, ex. « tcp or udp » (vide = tout capturer)")
     analyseur.add_argument("--duree", "-d", type=float, default=0,
@@ -112,6 +121,26 @@ def main(argv: list[str] | None = None) -> int:
     if options.interfaces:
         return afficher_interfaces()
 
+    # ------------------------------------------------------------- mode replay
+    # Un fichier .pcap remplace la capture : le reste de la chaîne — analyseur, table des
+    # communications, détection, transmission — est exactement le même. C'est ce qui fait
+    # du replay une vérification utile, et non une démonstration à part.
+    if options.inspecter:
+        if not options.pcap:
+            print("--inspecter demande un fichier : ajouter --pcap <fichier>")
+            return 2
+        try:
+            resume_fichier = mod_replay.resumer_fichier(options.pcap)
+        except mod_replay.ErreurReplay as erreur:
+            print(f"\n{erreur}\n")
+            return 2
+        print(f"\nFichier   : {resume_fichier['fichier']}")
+        print(f"Taille    : {resume_fichier['octets'] / 1024:.1f} ko")
+        print(f"Paquets   : {resume_fichier['paquets']}")
+        print(f"Période   : {resume_fichier['debut']} → {resume_fichier['fin']}")
+        print(f"Durée     : {resume_fichier['duree_secondes']:.1f} s\n")
+        return 0
+
     # ---------------------------------------------------------------- destination
     envoyeur: mod_sender.Envoyeur
     if options.a_blanc:
@@ -132,15 +161,20 @@ def main(argv: list[str] | None = None) -> int:
                                        detections=detections_a_transmettre()))
 
     # ------------------------------------------------------------------ interface
-    try:
-        interface = mod_capture.choisir_interface(options.interface)
-    except mod_capture.ErreurCapture as erreur:
-        print(f"\n{erreur}\n")
-        return 2
+    # En mode replay, aucune interface n'est nécessaire : les paquets viennent du fichier.
+    # On saute donc la sélection, au lieu d'imposer une interface qui ne servirait à rien.
+    if options.pcap:
+        interface = f"fichier {Path(options.pcap).name}"
+    else:
+        try:
+            interface = mod_capture.choisir_interface(options.interface)
+        except mod_capture.ErreurCapture as erreur:
+            print(f"\n{erreur}\n")
+            return 2
 
-    if interface is None:
-        print("Aucune interface précisée : préciser --interface (voir --interfaces).")
-        return 2
+        if interface is None:
+            print("Aucune interface précisée : préciser --interface (voir --interfaces).")
+            return 2
 
     # -------------------------------------------------------------------- capture
     session = str(uuid.uuid4())
@@ -157,10 +191,29 @@ def main(argv: list[str] | None = None) -> int:
     a_envoyer: dict[str, dict] = {}
     verrou = threading.Lock()      # accès partagé entre le fil de capture et celui d'envoi
 
+    def _instant_du_paquet(fiche: dict) -> dt.datetime | None:
+        """L'horodatage porté par la fiche, ou `None` s'il est illisible.
+
+        L'import est local et explicite : le nom du module de dates varie d'un fichier à
+        l'autre de ce dépôt, et c'est précisément l'erreur qu'a produite la première
+        version — un `NameError` au premier paquet, invisible en tests puisque le rejeu
+        n'était pas encore exercé de bout en bout.
+        """
+        try:
+            return dt.datetime.fromisoformat(
+                (fiche.get("horodatage") or "").replace("Z", "+00:00"))
+        except (ValueError, AttributeError, TypeError):
+            return None
+
     def sur_paquet(fiche: dict) -> None:
         communication = table.ajouter(fiche)
         if communication is not None:
-            communication = mod_flows.maj_etat(communication)
+            # L'état se calcule à l'heure **du paquet**, et non à celle de la machine.
+            # En capture en direct les deux coïncident ; en rejeu elles diffèrent de
+            # plusieurs mois, et confondre les deux ferait paraître abandonnée toute
+            # connexion d'un fichier ancien.
+            communication = mod_flows.maj_etat(
+                communication, _instant_du_paquet(fiche))
             fiche_communication = communication.vers_dict()
             with verrou:
                 a_envoyer[fiche_communication["cle"]] = fiche_communication
@@ -168,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def retirer_communications_terminees() -> None:
         """Sort de la table les conversations terminées, et les garde à transmettre."""
-        for communication in table.retirer_terminées():
+        for communication in table.retirer_terminées(capteur.maintenant()):
             fiche_communication = communication.vers_dict()
             with verrou:
                 a_envoyer[fiche_communication["cle"]] = fiche_communication
@@ -194,16 +247,26 @@ def main(argv: list[str] | None = None) -> int:
         On copie puis on vide sous verrou : sans cela, un paquet arrivé pendant l'envoi
         serait perdu, ou envoyé deux fois.
         """
-        table.completer_etat()
+        table.completer_etat(capteur.maintenant())
         with verrou:
             en_attente = list(a_envoyer.values())
             a_envoyer.clear()
         return en_attente
 
-    capteur = mod_capture.Capture(interface=interface, filtre=options.filtre,
-                                  sur_paquet=sur_paquet)
+    # La source change, le reste ne change pas : `sur_paquet` alimente la même table de
+    # communications et le même détecteur, et l'envoyeur transmet de la même façon.
+    if options.pcap:
+        try:
+            capteur = mod_replay.ReplayPcap(options.pcap, sur_paquet=sur_paquet,
+                                            vitesse=options.vitesse)
+        except mod_replay.ErreurReplay as erreur:
+            print(f"\n{erreur}\n")
+            return 2
+    else:
+        capteur = mod_capture.Capture(interface=interface, filtre=options.filtre,
+                                      sur_paquet=sur_paquet)
 
-    print(f"\nInterface : {interface}")
+    print(f"\n{'Fichier' if options.pcap else 'Interface'} : {interface}")
     print(f"Filtre    : {options.filtre or 'aucun (tout capturer)'}")
     print(f"Session   : {session}")
     if options.duree:
@@ -211,7 +274,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         capteur.demarrer()
-    except mod_capture.ErreurCapture as erreur:
+    except (mod_capture.ErreurCapture, mod_replay.ErreurReplay) as erreur:
         print(f"\n{erreur}\n")
         return 2
 
@@ -230,6 +293,11 @@ def main(argv: list[str] | None = None) -> int:
     debut = time.monotonic()
     try:
         while not arret["demande"]:
+            # Un fichier a une fin : le rejeu annonce qu'il a tout lu, et la boucle
+            # s'arrête. Sans cela, la ligne de commande tournerait indéfiniment après la
+            # fin du fichier — elle attendrait un paquet qui ne viendra jamais.
+            if options.pcap and getattr(capteur, "termine", False):
+                break
             if options.duree and (time.monotonic() - debut) >= options.duree:
                 break
             time.sleep(0.5)
@@ -250,6 +318,7 @@ def main(argv: list[str] | None = None) -> int:
     # Les détections avant l'arrêt : le dernier passage doit porter sur le trafic
     # complet, sinon les formes apparues dans les dernières secondes ne seraient
     # jamais signalées.
+    table.completer_etat(capteur.maintenant())
     detecteur.analyser([communication.vers_dict() for communication in table.actives()])
     comptes = detecteur.compter()
     print(f"  détections         : {comptes.get('observation', 0)} observation(s) · "

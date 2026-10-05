@@ -239,6 +239,20 @@ def test_le_filtre_par_niveau_sur_la_route(client):
     assert alertes["detections"][0]["regle"] == "faisceau_indices"
 
 
+def test_aucune_purge_sans_persistance():
+    """Sans base de données, il n'y a rien à conserver, donc rien à purger.
+
+    Le fil de purge ne doit pas démarrer : il tournerait pour supprimer des données qui
+    n'existent pas, et le journal annoncerait une purge qui ne fait rien. Vérifier
+    l'absence est ici plus utile que vérifier la présence.
+    """
+    from backend.dependances import reinitialiser_stockage
+    from backend.main import lancer_purge_periodique
+
+    reinitialiser_stockage()                    # le stockage en mémoire
+    assert lancer_purge_periodique() is None
+
+
 def test_le_filtre_du_journal_est_precis():
     """Le filtre doit taire une erreur de Windows sans masquer les vraies pannes.
 

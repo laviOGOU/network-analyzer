@@ -248,7 +248,14 @@ CREATE TABLE IF NOT EXISTS analyzer.alerts (
     ip_concernee    inet,
     debut           timestamptz NOT NULL DEFAULT now(),
     dernier_vu      timestamptz,
-    occurrences     integer     NOT NULL DEFAULT 1 CHECK (occurrences >= 1)
+    occurrences     integer     NOT NULL DEFAULT 1 CHECK (occurrences >= 1),
+
+    -- La règle compose la clé d'unicité ci-dessous. Sans cette contrainte, une détection
+    -- renvoyée à chaque lot créerait une ligne de plus, et le tableau de bord afficherait
+    -- cent fois la même phrase — le défaut le plus courant d'un module de détection, et
+    -- celui que la phase 4 avait précisément évité en mémoire. Le schéma doit porter la
+    -- même garantie, sans quoi elle disparaît au moment du passage en production.
+    UNIQUE (session_id, regle, ip_concernee)
 );
 
 COMMENT ON TABLE analyzer.alerts IS

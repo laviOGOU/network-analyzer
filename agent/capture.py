@@ -221,6 +221,17 @@ class Capture:
             time.sleep(0.1)
         return self.recus > 0
 
+    def maintenant(self) -> "dt.datetime":
+        """L'instant courant, pour la capture en direct.
+
+        La méthode existe pour que les deux sources — le réseau et un fichier — soient
+        interchangeables sans que le reste de l'agent ait à savoir laquelle il utilise.
+        Une capture vit dans le présent ; un fichier vit à la date de ses paquets.
+        """
+        import datetime as dt
+
+        return dt.datetime.now(dt.timezone.utc)
+
     def arreter(self) -> None:
         """Ferme la capture. Sans effet si elle n'est pas active."""
         with self._verrou:

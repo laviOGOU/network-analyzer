@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -160,6 +162,46 @@ def afficher_demarrage() -> None:
                     configuration.hote, configuration.port, "voir ci-dessus")
 
 
+def lancer_purge_periodique(intervalle_heures: float = 24.0) -> threading.Thread | None:
+    """Supprime périodiquement les sessions plus anciennes que la durée de conservation.
+
+    Rien à faire tant que le stockage est en mémoire : la question ne se pose pas, tout
+    disparaît à l'arrêt. Avec PostgreSQL, en revanche, une base qui ne se purge jamais
+    grossit indéfiniment — et personne ne s'en aperçoit avant qu'elle ne coûte cher.
+
+    Le fil est un démon : il ne retient pas l'arrêt du backend. Il attend d'abord un
+    intervalle complet avant sa première exécution, pour ne pas lancer un `DELETE` global
+    pendant que la base reçoit ses premières écritures.
+    """
+    from backend.config import configuration
+    from backend.dependances import obtenir_stockage
+
+    stockage = obtenir_stockage()
+    if not hasattr(stockage, "purger"):
+        # Stockage en mémoire : il n'y a rien à conserver, donc rien à supprimer.
+        return None
+
+    def boucle() -> None:
+        while True:
+            time.sleep(intervalle_heures * 3600)
+            try:
+                supprimees = stockage.purger(configuration.retention_jours)
+                if supprimees:
+                    logger.info("Purge automatique : %d session(s) de plus de %d jours",
+                                supprimees, configuration.retention_jours)
+            except Exception as erreur:                              # noqa: BLE001
+                # Une purge qui échoue ne doit jamais arrêter le backend : elle sera
+                # retentée au prochain tour. On le consigne et on continue.
+                logger.warning("Purge automatique en échec (%s) — nouvelle tentative "
+                               "dans %.0f h", type(erreur).__name__, intervalle_heures)
+
+    fil = threading.Thread(target=boucle, name="purge-periodique", daemon=True)
+    fil.start()
+    logger.info("Purge automatique active : conservation de %d jours",
+                configuration.retention_jours)
+    return fil
+
+
 class FiltreFermeturesBrutales(logging.Filter):
     """Tait une erreur de Windows — celle-là, et aucune autre.
 
@@ -205,5 +247,6 @@ if __name__ == "__main__":                          # pragma: no cover
 
     afficher_demarrage()
     apaiser_le_journal()
+    lancer_purge_periodique()
     uvicorn.run(application, host=configuration.hote, port=configuration.port,
                 log_level="info")

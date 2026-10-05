@@ -648,3 +648,127 @@ d'être su. Les confondre avec des alertes serait aussi fautif que de les taire.
   seuils de l'agent par un import direct. L'agent tourne sur la machine surveillée, le
   backend en ligne : une dépendance obligatoire ferait échouer le déploiement en ligne pour
   une information d'agrément. L'import est désormais facultatif.
+
+---
+
+# Phase 5 — Enrichir, conserver, rejouer, déployer
+
+## 1. Ce qui a été construit
+
+| Élément | Ce qu'il fait |
+|---|---|
+| `backend/enrichment.py` | situe une adresse (ipinfo.io) et rapporte sa réputation (AbuseIPDB) |
+| `agent/replay.py` | rejoue un fichier `.pcap` par **la même chaîne** que la capture |
+| `backend/stockage_postgres.py` | conserve tout dans PostgreSQL — donc dans Supabase |
+| `sql/schema.sql` | la clé qui empêche les doublons d'alerte, et la purge à 30 jours |
+
+## 2. Pourquoi ces choix
+
+**L'enrichissement n'envoie jamais une adresse privée à un service tiers.** Ni 192.168.x,
+ni 10.x, ni fe80::. Ces adresses ne sortent pas sur Internet : aucun tiers ne peut rien en
+dire, et les interroger reviendrait à publier chez deux fournisseurs la topologie de votre
+réseau local. Le schéma interdit déjà ces lignes par une contrainte ; le code les écarte en
+amont. Et un test ne vérifie pas seulement que la fonction rend `None` : il vérifie
+qu'**aucune requête HTTP n'a été tentée** — car une fonction qui interrogerait le service
+avant de renoncer aurait déjà divulgué ce qu'il fallait protéger.
+
+**L'enrichissement est facultatif, et tout fonctionne sans lui.** Sans clé configurée, rien
+ne se passe : les adresses s'affichent sans contexte, et le reste de l'outil est intact. Un
+outil d'analyse qui cesserait de marcher sans accès à un service tiers serait inutilisable
+au pire moment — et sur un réseau isolé, il ne fonctionnerait pas du tout.
+
+**Le mode replay n'est pas une démonstration à part : c'est la preuve de l'architecture.**
+Il traverse exactement la même chaîne que la capture — même analyseur, même table de
+communications, même détection, même transmission. Seule la source des paquets change. Un
+outil dont tout le raisonnement serait soudé à la capture en direct ne pourrait pas rejouer
+un fichier ; celui-ci le fait en trois lignes de configuration.
+
+**Supabase est PostgreSQL.** Il n'y a donc pas de code « Supabase » : il y a du code
+PostgreSQL, et une chaîne de connexion. `ANALYZER_DATABASE_URL` pointe vers Supabase en
+ligne, vers une base locale pendant la mise au point. C'est ce qui a permis d'éprouver la
+persistance pour de vrai — écriture, mise à jour, purge, cascade — **avant** de la déployer.
+
+**Le choix du stockage se fait à un seul endroit**, dans la couche de dépendances. Aucune
+route ne sait si elle lit en mémoire ou dans PostgreSQL : elles appellent les mêmes
+méthodes. C'est la promesse que cette couche faisait dès la phase 1, et elle est tenue.
+
+## 3. Comment les fonctions communiquent
+
+    fichier .pcap ──► replay.py ──┐
+                                  ├──► parser.py ──► flows.py ──► detection.py
+    interface réseau ──► capture.py ──┘                    │              │
+                                                           ▼              ▼
+                                              sender.py ──► POST /api/v1/ingest
+                                                           │
+                                    ┌──────────────────────┴────────────┐
+                                    ▼                                   ▼
+                          stockage_postgres.py                  enrichment.py
+                          (Supabase en ligne)                   (ipinfo.io, AbuseIPDB)
+                                    │                                   │
+                                    └──────────────► GET /api/v1/* ◄────┘
+                                                            │
+                                                            ▼
+                                                     dashboard.js
+
+## 4. Cinq questions de défense
+
+**1. Pourquoi ne pas enrichir toutes les adresses, y compris locales ?**
+
+Parce qu'aucun service externe ne peut dire quoi que ce soit d'une adresse privée : elle
+n'existe que dans votre réseau. L'interroger enverrait à un tiers une information qu'il ne
+peut pas traiter, et qui décrit votre réseau. C'est une perte de quota et une fuite
+d'information, pour un résultat vide. Le code l'écarte, la base l'interdit, et un test
+vérifie qu'aucune requête n'est tentée.
+
+**2. En quoi le mode replay prouve-t-il quelque chose sur l'architecture ?**
+
+Il rejoue un fichier en traversant la même chaîne que la capture : même analyseur, même
+table de communications, même détection, même envoi. Si le raisonnement avait été soudé à la
+capture en direct — par exemple en lisant les paquets directement dans la boucle de capture
+—, le replay serait impossible sans réécrire la moitié du code. Il tient en une option.
+
+**3. Un score de réputation élevé signifie-t-il que l'adresse est malveillante ?**
+
+Non, et l'interface le dit. Un score est l'avis d'un service tiers, à un instant donné, sur
+des signalements qui peuvent être anciens ou erronés. Une adresse partagée par des milliers
+d'utilisateurs — un opérateur mobile, un hébergeur — accumule des signalements sans qu'aucun
+de ses utilisateurs actuels ne soit en cause. Le score est affiché comme un contexte, jamais
+comme une conclusion.
+
+**4. Où sont les données, et combien de temps ?**
+
+Dans une base PostgreSQL — Supabase en ligne. Trente jours par défaut, configurable. La
+purge supprime les sessions anciennes, et la cascade emporte leurs paquets, leurs
+communications et leurs détections. Un test vérifie que rien ne subsiste après la purge :
+une cascade incomplète ferait grossir la base en silence pendant des mois.
+
+**5. Que se passe-t-il si la base de données est indisponible ?**
+
+Le backend démarre quand même, et le dit : le schéma absent est signalé avec la commande
+qui le crée. Les lots suivants échouent proprement au lieu de faire tomber le service. Le
+choix est assumé : un backend qui refuse de démarrer parce que la base est momentanément
+injoignable est plus difficile à diagnostiquer qu'un backend qui démarre en annonçant ce
+qui ne va pas.
+
+## 5. Ce qui a été trouvé en écrivant cette phase
+
+- **Le défaut le plus important du projet, trouvé par le mode replay.** La table des
+  communications comparait les paquets à l'horloge de la machine. En direct, les deux
+  coïncident ; en rejeu, elles diffèrent de plusieurs mois — et **toutes** les connexions
+  d'un fichier ancien ressortaient en « échec probable ». Le rejeu produisait exactement le
+  contraire de ce que contenait le fichier. Les deux sources exposent maintenant un
+  « maintenant » qui leur est propre : l'heure courante pour la capture, la date du dernier
+  paquet lu pour un fichier.
+- **Une contrainte d'unicité inventée.** Le stockage PostgreSQL utilisait une clé
+  d'unicité `(session, titre, adresse)` qui n'existait pas dans le schéma. La base a refusé,
+  à raison : c'est le schéma qui décide, pas le code. La bonne clé — `(session, règle,
+  adresse)` — a été ajoutée au schéma, ce qui a révélé que le schéma ne protégeait pas
+  encore contre le doublon d'alerte que la phase 4 évitait déjà en mémoire.
+- **Une session manquante faisait échouer tout un lot.** Les communications et les
+  détections ne créaient pas la session dont elles dépendent : un agent envoyant un lot
+  partiel voyait sa clé étrangère rejetée, et l'information était perdue pour une ligne
+  absente.
+- **Un `NameError` au premier paquet rejoué.** `main.py` n'importait pas les dates, et une
+  exception dans le traitement d'un paquet tuait tout le rejeu **en silence**. Le rejeu
+  compte désormais les échecs et s'arrête au bout de cinq consécutifs en disant pourquoi,
+  plutôt que de parcourir un million de paquets sans rien envoyer.

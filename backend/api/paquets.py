@@ -29,7 +29,8 @@ try:
 except ImportError:                                  # pragma: no cover
     SEUILS: dict[str, int] = {}
 
-from backend.dependances import obtenir_stockage
+from backend.dependances import obtenir_enrichissement, obtenir_stockage
+from backend.enrichment import Enrichissement
 from backend.explain import llm
 from backend.explain import rules as moteur_explication
 from backend.storage import Stockage
@@ -93,6 +94,43 @@ def lister_communications(
         )
     return {"communications": communications, "affichees": len(communications),
             "statistiques": stockage.statistiques()}
+
+
+@router.get("/enrichment", summary="Contexte externe d'une adresse IP")
+def enrichir_adresse(
+    enrichissement: Annotated[Enrichissement, Depends(obtenir_enrichissement)],
+    ip: Annotated[str, Query(min_length=2, max_length=45, description="Adresse à situer")],
+) -> dict[str, Any]:
+    """Rend la situation géographique et la réputation d'une adresse, si elles sont connues.
+
+    Deux choses que cette route ne fait pas, et qui comptent :
+
+    Elle n'enrichit **jamais une adresse privée**. Les adresses de votre réseau local ne
+    sortent pas sur Internet : aucun service tiers ne peut rien en dire, et les
+    interroger reviendrait à publier la topologie de votre réseau. La réponse le dit
+    explicitement plutôt que de renvoyer une erreur.
+
+    Elle ne bloque **jamais**. Si le quota est atteint ou si le service ne répond pas,
+    la réponse arrive quand même, avec la raison. Le tableau de bord n'attend pas après
+    un service externe pour s'afficher.
+    """
+    if not enrichissement.disponible():
+        return {
+            "ip": ip, "enrichi": False,
+            "raison": "Enrichissement inactif : aucune clé configurée.",
+            "configuration": enrichissement.etat(),
+        }
+
+    resultat = enrichissement.enrichir(ip)
+    return {
+        "ip": ip,
+        "enrichi": resultat is not None and not resultat.get("en_attente"),
+        "donnees": resultat or {},
+        "resume": Enrichissement.resume(resultat),
+        "avertissement": ("Données fournies par des tiers, à un instant donné. Un score de "
+                          "réputation n'est pas une preuve : c'est l'avis d'un service, "
+                          "et il peut être faux."),
+    }
 
 
 @router.get("/alerts", summary="Détections de comportements inhabituels")
@@ -185,4 +223,5 @@ def sante() -> dict[str, Any]:
         # information d'état du service, et l'interface la lit déjà à cet endroit.
         "couche_ia": llm.etat(),
         "base_de_connaissances": {"services": moteur_explication.services_connus()},
+        "enrichissement": obtenir_enrichissement().etat(),
     }

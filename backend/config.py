@@ -86,6 +86,24 @@ class Configuration:
     #: Nombre maximal de requêtes d'ingestion par minute, par adresse.
     limite_ingestion: int = 120
 
+    #: Clés des deux fournisseurs d'enrichissement. Vides par défaut, et c'est le
+    #: réglage recommandé : activer l'enrichissement revient à envoyer les adresses IP
+    #: observées sur votre réseau à deux services tiers.
+    cle_ipinfo: str = ""
+    cle_abuseipdb: str = ""
+
+    #: Chaîne de connexion PostgreSQL. Vide = stockage en mémoire.
+    #:
+    #: La même variable sert pour Supabase et pour une base locale : Supabase est
+    #: PostgreSQL, seule la chaîne change. Cette bascule par configuration, et non par
+    #: code, est ce qui permet d'éprouver la persistance en local avant de la déployer.
+    base_de_donnees: str = ""
+
+    #: Durée de conservation, en jours. Au-delà, la purge supprime les sessions et tout
+    #: ce qu'elles contiennent (cascade). Trente jours par défaut : de quoi revenir sur
+    #: un incident du mois, sans accumuler indéfiniment.
+    retention_jours: int = 30
+
     @classmethod
     def depuis_environnement(cls) -> "Configuration":
         """Construit la configuration et vérifie sa cohérence."""
@@ -114,6 +132,10 @@ class Configuration:
             origines_cors=_liste("ANALYZER_ORIGINES_CORS",
                                  ["http://127.0.0.1:8000", "http://localhost:8000"]),
             limite_ingestion=_entier("ANALYZER_LIMITE_INGESTION", 120),
+            cle_ipinfo=_texte("ANALYZER_IPINFO_TOKEN"),
+            cle_abuseipdb=_texte("ANALYZER_ABUSEIPDB_KEY"),
+            base_de_donnees=_texte("ANALYZER_DATABASE_URL"),
+            retention_jours=_entier("ANALYZER_RETENTION_JOURS", 30),
         )
 
     @property

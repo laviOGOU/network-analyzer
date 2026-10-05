@@ -1,12 +1,9 @@
 # Intelligent Network Packet Analyzer
 
-> **État : phase 4 sur 5.** Sont construits et vérifiés à ce jour : la capture réelle,
-> l'analyse des paquets, le regroupement en communications avec déduction d'état, le
-> schéma de base de données, la transmission, l'affichage en direct, le **moteur
-> d'explication** qui traduit tout cela en phrases compréhensibles, et la **détection**
-> des comportements inhabituels sur trois niveaux.
-> L'enrichissement et le branchement sur Supabase
-> arrivent dans la phase suivante — le README est mis à jour à chaque phase, et la
+> **État : projet complet — les cinq phases sont livrées.** Capture réelle, analyse des
+> paquets, communications avec déduction d'état, explications en langage humain,
+> détection sur trois niveaux, enrichissement par API externe, mode replay `.pcap`, et
+> persistance PostgreSQL (donc Supabase). — le README est mis à jour à chaque phase, et la
 > section « Limites » dit exactement ce qui n'existe pas encore.
 
 Capturer le trafic réseau, le structurer, le comprendre, et l'expliquer à quelqu'un qui
@@ -72,6 +69,7 @@ network-analyzer/
     parser.py           #   paquet Scapy → fiche structurée, jamais d'exception
     flows.py            #   regroupement en communications, état TCP, expiration
     detection.py        #   huit règles de détection, trois niveaux, faux positifs
+    replay.py           #   rejeu d'un fichier .pcap par la même chaîne
     sender.py           #   file d'attente bornée, regroupement par lots, réessai
     main.py             #   ligne de commande, assemblage, compteurs
   backend/              # tourne en ligne
@@ -87,6 +85,8 @@ network-analyzer/
     explain/
       rules.py          #   moteur d'explication déterministe + base de connaissances
       llm.py            #   couche IA facultative, avec repli automatique
+    enrichment.py       #   ipinfo.io + AbuseIPDB, cache et limitation de débit
+    stockage_postgres.py # persistance PostgreSQL — donc Supabase
   web/
     templates/          #   page du tableau de bord, page d'erreur
     static/             #   feuille de style, script
@@ -127,6 +127,7 @@ pour la phase 1.
 | `GET` | `/api/v1/flows` | public | communications regroupées, filtrables (`etat`, `protocole`, `recherche`) |
 | `GET` | `/api/v1/flows/explications` | public | toutes les explications d'une communication (`cle`, `reformuler`) |
 | `GET` | `/api/v1/alerts` | public | détections, filtrables (`niveau`, `session`) |
+| `GET` | `/api/v1/enrichment` | public | contexte externe d'une adresse (`ip`) |
 | `GET` | `/api/v1/stats` | public | compteurs, répartitions, classements |
 | `GET` | `/api/v1/sessions` | public | sessions de capture reçues |
 | `GET` | `/api/v1/health` | public | état du service |
@@ -241,6 +242,39 @@ Options utiles : `--duree 30` (arrêt automatique), `--filtre "tcp or udp"` (fil
 > vous disposez d'une autorisation écrite. Capturer le trafic d'un réseau qui ne vous
 > appartient pas est illégal.
 
+## Conserver, rejouer, déployer
+
+**La persistance.** `ANALYZER_DATABASE_URL` décide de tout : renseignée, le backend écrit
+dans PostgreSQL (Supabase en ligne) ; vide, il garde tout en mémoire et rien ne survit à
+l'arrêt. Aucune route ne connaît la différence — le choix se fait dans la couche de
+dépendances, et c'est ce qui a permis de passer de l'un à l'autre sans réécrire une ligne
+d'API.
+
+```bat
+psql "%ANALYZER_DATABASE_URL%" -v ON_ERROR_STOP=1 -f sql/schema.sql
+```
+
+**La purge.** Trente jours par défaut (`ANALYZER_RETENTION_JOURS`). Elle supprime les
+sessions anciennes, et la cascade emporte leurs paquets, communications et détections.
+Un rendu de zéro n'est pas un échec : c'est qu'il n'y avait rien à supprimer.
+
+**Le mode replay.** Un fichier `.pcap` remplace la capture, et **traverse la même chaîne** :
+même analyseur, même table de communications, même détection, même envoi.
+
+```bat
+python -m agent.main --pcap capture.pcap --inspecter
+python -m agent.main --pcap capture.pcap --backend http://127.0.0.1:8000 --jeton <jeton>
+```
+
+Trois usages : rendre une démonstration reproductible, éprouver une correction sur un
+trafic connu, et travailler sans réseau. Les horodatages viennent **du fichier**, pas de
+l'horloge de la machine : sans cela, un fichier ancien paraîtrait entièrement constitué de
+connexions abandonnées.
+
+**L'enrichissement.** Facultatif, désactivé tant qu'aucune clé n'est renseignée. Il
+n'interroge que des adresses publiques — jamais 192.168.x, 10.x ou fe80::, qu'aucun service
+tiers ne peut renseigner et qui décriraient votre réseau local à un tiers.
+
 ## La détection
 
 Huit règles, trois niveaux, et une règle de synthèse. Le vocabulaire des niveaux dit le
@@ -336,7 +370,7 @@ from backend.explain import explications     # toutes les explications applicabl
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**162 tests**, dont :
+**205 tests**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole
@@ -353,6 +387,16 @@ from backend.explain import explications     # toutes les explications applicabl
   cours de route (état incertain), expiration TCP et UDP, délais réglables ;
 - **API des communications** — refonte par clé au lieu de la duplication, filtres par état
   et par protocole, refus d'un total incohérent ;
+- **replay** — le rejeu utilise les horodatages du fichier et non l'heure courante
+  (sans quoi un fichier ancien produirait un rapport entièrement faux), deux rejeux
+  donnent le même résultat, un paquet abîmé n'arrête pas la lecture, un fichier absent ou
+  d'un format inattendu est signalé clairement ;
+- **enrichissement** — **aucune requête n'est tentée pour une adresse privée**, une
+  adresse publique est bien interrogée chez les deux fournisseurs, une panne ne bloque
+  pas, un échec n'est pas mis en cache vingt-quatre heures, et le quota est respecté ;
+- **persistance PostgreSQL** — exécutés seulement si `ANALYZER_DATABASE_URL_TEST` est
+  définie ; ils vérifient ce que la mémoire ne peut pas prouver : c'est **la base** qui
+  empêche un doublon, et la cascade de la purge qui emporte tout ce qui dépend ;
 - **détection** — aucune règle isolée ne produit d'alerte (éprouvé forme par forme),
   trois indices convergents en produisent une, deux règles d'une même famille ne comptent
   pas double, une observation ne compte pas comme un indice, les seuils sont respectés à

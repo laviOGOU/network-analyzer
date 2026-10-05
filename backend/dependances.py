@@ -17,19 +17,40 @@ modifier une seule route.
 
 from __future__ import annotations
 
+import logging
+
 from backend.config import configuration
+from backend.enrichment import Enrichissement
 from backend.storage import Stockage
+
+logger = logging.getLogger(__name__)
 
 #: Instance unique, construite au premier appel. La taille vient de la configuration :
 #: aucun nombre magique dans le code des routes.
 _stockage: Stockage | None = None
 
 
-def obtenir_stockage() -> Stockage:
-    """Rend le stockage de l'application (créé à la première demande)."""
+def obtenir_stockage():
+    """Rend le stockage de l'application (créé à la première demande).
+
+    Le choix se fait **ici, et nulle part ailleurs**. Une chaîne de connexion configurée
+    donne le stockage PostgreSQL ; sans elle, le stockage en mémoire. Aucune route ne
+    connaît la différence : elles appellent les mêmes méthodes, avec les mêmes noms.
+
+    C'est ce qui permet à la démonstration locale de fonctionner sans base de données, et
+    au déploiement en ligne de conserver l'historique — sans deux versions du code.
+    """
     global _stockage
     if _stockage is None:
-        _stockage = Stockage(taille_max=configuration.taille_memoire)
+        if configuration.base_de_donnees:
+            from backend.stockage_postgres import StockagePostgres
+
+            logger.info("Stockage : PostgreSQL (historique conservé)")
+            _stockage = StockagePostgres(configuration.base_de_donnees,
+                                         taille_max=configuration.taille_memoire)
+        else:
+            logger.info("Stockage : en mémoire (rien n'est conservé après l'arrêt)")
+            _stockage = Stockage(taille_max=configuration.taille_memoire)
     return _stockage
 
 
@@ -38,3 +59,19 @@ def reinitialiser_stockage() -> Stockage:
     global _stockage
     _stockage = Stockage(taille_max=configuration.taille_memoire)
     return _stockage
+
+
+#: Enrichissement : une seule instance, et pour une raison précise. Le cache et le
+#: limiteur de débit doivent être **partagés** par toutes les requêtes ; une instance par
+#: requête redemanderait vingt fois la même adresse et épuiserait le quota des services
+#: gratuits en quelques minutes.
+_enrichissement: Enrichissement | None = None
+
+
+def obtenir_enrichissement() -> Enrichissement:
+    """Rend l'enrichissement de l'application (créé à la première demande)."""
+    global _enrichissement
+    if _enrichissement is None:
+        _enrichissement = Enrichissement(cle_ipinfo=configuration.cle_ipinfo,
+                                         cle_abuseipdb=configuration.cle_abuseipdb)
+    return _enrichissement
