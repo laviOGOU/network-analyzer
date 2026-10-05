@@ -43,6 +43,26 @@ def lister_paquets(
     }
 
 
+@router.get("/flows", summary="Communications (Connections)")
+def lister_communications(
+    stockage: Annotated[Stockage, Depends(obtenir_stockage)],
+    limite: Annotated[int, Query(ge=1, le=1000)] = 100,
+    etat: Annotated[str | None, Query(max_length=32, description="tentative, établie, fermée…")] = None,
+    protocole: Annotated[str | None, Query(max_length=32)] = None,
+    recherche: Annotated[str | None, Query(max_length=64, description="IP, port, état")] = None,
+) -> dict[str, Any]:
+    """Communications regroupées, la plus récente d'abord.
+
+    Chaque communication porte `etat` et `etat_certain`. Ce second champ doit être
+    affiché, pas seulement stocké : une communication vue en cours de route ne peut pas
+    être présentée avec la même assurance qu'une ouverture observée en entier.
+    """
+    communications = stockage.communications(limite=limite, etat=etat,
+                                             protocole=protocole, recherche=recherche)
+    return {"communications": communications, "affichees": len(communications),
+            "statistiques": stockage.statistiques()}
+
+
 @router.get("/stats", summary="Chiffres du tableau de bord")
 def statistiques(stockage: Annotated[Stockage, Depends(obtenir_stockage)]) -> dict[str, Any]:
     """Compteurs, répartitions et classements."""

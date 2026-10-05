@@ -81,6 +81,51 @@
     </section>
   </div>
 
+  <section aria-labelledby="titre-communications">
+    <div class="titre-section--ligne">
+      <h2 id="titre-communications" class="titre-section">Connections</h2>
+      <div class="filtres">
+        <label class="sr-only" for="filtre-etat">Filtrer par état</label>
+        <select id="filtre-etat">
+          <option value="">Tous les états</option>
+          <option value="établie">Établie</option>
+          <option value="en cours">En cours</option>
+          <option value="tentative">Tentative</option>
+          <option value="fermée">Fermée</option>
+          <option value="échec probable">Échec probable</option>
+          <option value="inconnue">Inconnue</option>
+        </select>
+      </div>
+    </div>
+    <p class="aide">
+      Une communication regroupe tous les paquets échangés entre deux machines, dans les
+      deux sens. L'état est déduit des indicateurs observés ; quand la capture a commencé
+      après le début de la conversation, il est marqué <em>incertain</em> — c'est une
+      déduction, pas un fait établi.
+    </p>
+    <div class="tableau-enveloppe">
+      <table class="tableau" id="tableau-communications">
+        <caption class="sr-only">Communications observées, la plus récente d'abord</caption>
+        <thead>
+          <tr>
+            <th scope="col">État</th>
+            <th scope="col">Protocole</th>
+            <th scope="col">Extrémité A</th>
+            <th scope="col">Extrémité B</th>
+            <th scope="col">Paquets ↔</th>
+            <th scope="col">Octets ↔</th>
+            <th scope="col">Durée</th>
+            <th scope="col">Ce que l'on peut en dire</th>
+          </tr>
+        </thead>
+        <tbody id="corps-communications"></tbody>
+      </table>
+    </div>
+    <p class="vide" id="communications-vide" hidden>
+      Aucune communication pour l'instant. Elles apparaissent dès que l'agent transmet.
+    </p>
+  </section>
+
   <section aria-labelledby="titre-paquets">
     <div class="titre-section--ligne">
       <h2 id="titre-paquets" class="titre-section">Packets</h2>
@@ -144,6 +189,21 @@
 </footer>
 
 {# Mise en forme d'une ligne de paquet, recopiée par le JavaScript. #}
+<template id="gabarit-communication">
+  <tr>
+    <td>
+      <span class="pastille-etat"></span>
+    </td>
+    <td><span class="pastille-protocole"></span></td>
+    <td class="col-extremite-a mono-cellule"></td>
+    <td class="col-extremite-b mono-cellule"></td>
+    <td class="mono-cellule col-echanges"></td>
+    <td class="mono-cellule col-volume"></td>
+    <td class="mono-cellule col-duree"></td>
+    <td class="col-note"></td>
+  </tr>
+</template>
+
 <template id="gabarit-ligne">
   <tr>
     <td class="col-heure"></td>

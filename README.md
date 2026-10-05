@@ -1,10 +1,11 @@
 # Intelligent Network Packet Analyzer
 
-> **État : phase 1 sur 5.** Ce dépôt contient ce qui est construit et vérifié à ce jour :
-> la capture réelle, l'analyse des paquets, la transmission et l'affichage en direct.
-> Les communications regroupées, les explications, la détection, l'enrichissement et la
-> base de données arrivent dans les phases suivantes — le README est mis à jour à chaque
-> phase, et la section « Limites » dit exactement ce qui n'existe pas encore.
+> **État : phase 2 sur 5.** Sont construits et vérifiés à ce jour : la capture réelle,
+> l'analyse des paquets, le regroupement en communications avec déduction d'état, le
+> schéma de base de données, la transmission et l'affichage en direct.
+> Les explications, la détection, l'enrichissement et le branchement sur Supabase
+> arrivent dans les phases suivantes — le README est mis à jour à chaque phase, et la
+> section « Limites » dit exactement ce qui n'existe pas encore.
 
 Capturer le trafic réseau, le structurer, le comprendre, et l'expliquer à quelqu'un qui
 n'est pas spécialiste.
@@ -27,10 +28,11 @@ tests reproductibles. Il arrive après la phase 2, quand le format d'entrée ser
 
 ## Aperçu
 
-![Tableau de bord — vue Traffic](docs/capture-phase1.png)
+![Tableau de bord — vue Traffic et Connections](docs/capture-phase2.png)
 
-*Capture réelle : 1 264 paquets reçus d'un agent sur réseau Wi-Fi, IPv4 et IPv6 mêlés,
-six protocoles identifiés.*
+*Capture réelle : trafic Wi-Fi, IPv4 et IPv6 mêlés. La section **Connections** regroupe
+les paquets en conversations ; les pastilles en pointillés signalent les états déduits
+d'une observation incomplète.*
 
 ## Fonctionnement
 
@@ -66,6 +68,7 @@ network-analyzer/
   agent/                # tourne sur votre machine
     capture.py          #   lister/choisir une interface, démarrer/arrêter, droits
     parser.py           #   paquet Scapy → fiche structurée, jamais d'exception
+    flows.py            #   regroupement en communications, état TCP, expiration
     sender.py           #   file d'attente bornée, regroupement par lots, réessai
     main.py             #   ligne de commande, assemblage, compteurs
   backend/              # tourne en ligne
@@ -81,7 +84,10 @@ network-analyzer/
   web/
     templates/          #   page du tableau de bord, page d'erreur
     static/             #   feuille de style, script
-  tests/                #   pytest : paquets forgés, API, file d'attente
+  sql/
+    schema.sql          #   schéma Supabase commenté (6 tables, contraintes, RLS, purge)
+    verifier-schema.sql #   autotest du schéma : 17 contrôles de comportement
+  tests/                #   pytest : paquets forgés, communications, API, file d'attente
   docs/
     DEFENSE.md          #   dossier de soutenance
     SCENARIOS-TEST.md   #   dix scénarios manuels et leur résultat attendu
@@ -112,6 +118,7 @@ pour la phase 1.
 |---|---|---|---|
 | `POST` | `/api/v1/ingest` | **jeton d'agent** | recevoir un lot de paquets |
 | `GET` | `/api/v1/packets` | public | derniers paquets, filtrables (`limite`, `protocole`, `session`, `recherche`) |
+| `GET` | `/api/v1/flows` | public | communications regroupées, filtrables (`etat`, `protocole`, `recherche`) |
 | `GET` | `/api/v1/stats` | public | compteurs, répartitions, classements |
 | `GET` | `/api/v1/sessions` | public | sessions de capture reçues |
 | `GET` | `/api/v1/health` | public | état du service |
@@ -129,13 +136,40 @@ qui pourrait remplir la base de paquets inventés, et le tableau de bord deviend
 
 ## Base de données
 
-**Phase 1 : aucun stockage persistant.** Les paquets vivent dans un tampon circulaire
-borné, en mémoire, et disparaissent au redémarrage. C'est un choix assumé : la phase 1
-prouve la plomberie, la phase 2 établit le schéma à partir de ce qu'on manipule vraiment,
-et la phase 5 le branche sur Supabase (PostgreSQL hébergé).
+Le schéma complet est dans [`sql/schema.sql`](sql/schema.sql) — six tables commentées,
+une par question à laquelle elles répondent :
 
-Le stockage est déjà isolé derrière une classe, `backend/storage.py`. Les routes ne
-connaissent que ses méthodes : la bascule vers Supabase ne les touchera pas.
+| Table | La question à laquelle elle répond |
+|---|---|
+| `capture_sessions` | quand et où a-t-on observé ? |
+| `flows` | qui a parlé à qui, combien, et comment cela s'est-il terminé ? |
+| `packets` | que contenait cette communication ? (plafonné, métadonnées seules) |
+| `alerts` | qu'est-ce qui mérite un regard ? (observation / hypothèse / alerte) |
+| `ip_enrichments` | que sait-on déjà de cette adresse ? (cache des API externes) |
+| `explanations` | qu'est-ce que cela veut dire ? (faits observés, interprétation, confiance) |
+
+**Trois choix structurants, défendus dans `docs/DEFENSE.md` :** une adresse IP privée ne
+peut pas entrer dans le cache d'enrichissement (une contrainte SQL l'interdit) ; une même
+communication ne peut pas exister en double (clé unique, ce qui rend l'envoi répété sans
+danger) ; et la sécurité au niveau des lignes est active **sans aucune politique**, ce qui
+signifie que seule la clé de service du backend peut lire — le navigateur ne reçoit jamais
+de clé Supabase.
+
+Le schéma s'éprouve lui-même :
+
+```bat
+psql -v ON_ERROR_STOP=1 -d analyzer_test -f sql/verifier-schema.sql
+```
+
+**Dix-sept contrôles de comportement** : une adresse privée est refusée, une clé de
+communication en double aussi, un port hors bornes aussi, un niveau d'alerte inventé
+aussi, la cascade emporte bien communications et paquets, et la purge supprime au-delà de
+trente jours en conservant le reste.
+
+**En phase 2, la conservation reste en mémoire** : le schéma est écrit et éprouvé, mais le
+backend n'y écrit pas encore. Le stockage est isolé derrière une classe
+(`backend/storage.py`) dont les routes ne connaissent que les méthodes : le branchement
+sur Supabase, en phase 5, ne touchera aucune route.
 
 ## Installation
 
@@ -205,7 +239,7 @@ Options utiles : `--duree 30` (arrêt automatique), `--filtre "tcp or udp"` (fil
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**65 tests**, dont :
+**103 tests**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole
@@ -216,7 +250,12 @@ Options utiles : `--duree 30` (arrêt automatique), `--filtre "tcp or udp"` (fil
 - **API** — écriture sans jeton, avec un faux jeton, avec le bon ; lot vide ; paquet
   invalide ; filtres et recherche ; limitation de débit ;
 - **file d'attente** — regroupement par lots, débordement borné, backend injoignable,
-  réponse d'erreur non prise pour un succès.
+  réponse d'erreur non prise pour un succès ;
+- **communications** — clé identique dans les deux sens, compteurs par sens, ouverture
+  complète puis état « établie », SYN sans réponse, RST, un seul FIN, conversation vue en
+  cours de route (état incertain), expiration TCP et UDP, délais réglables ;
+- **API des communications** — refonte par clé au lieu de la duplication, filtres par état
+  et par protocole, refus d'un total incohérent.
 
 Dix scénarios manuels, avec leur résultat attendu, sont décrits dans
 [`docs/SCENARIOS-TEST.md`](docs/SCENARIOS-TEST.md).
@@ -226,17 +265,23 @@ Dix scénarios manuels, avec leur résultat attendu, sont décrits dans
 Rédigées honnêtement, comme demandé. **Aucune de ces limites n'est cachée par le code :
 ce qui n'est pas fait n'est pas simulé.**
 
-- **Pas de regroupement en communications (flows)** — chaque paquet est affiché isolément.
-  Impossible, en l'état, de dire « cette machine a ouvert 40 connexions en dix secondes ».
-  *Phase 2.*
-- **Pas d'explication en langage humain** — « TCP 443 » est affiché, pas expliqué.
-  *Phase 3.*
+- **Pas d'explication en langage humain** — « TCP 443 » est affiché, pas expliqué, et
+  l'état d'une communication est décrit en une phrase, pas encore accompagné d'une
+  explication structurée (titre, faits observés, interprétation, confiance). *Phase 3.*
 - **Pas de détection** — un scan de ports est visible dans les données, mais rien ne le
   signale. *Phase 4.*
 - **Pas d'enrichissement** — aucune adresse n'est rattachée à un pays ou à une
   organisation. *Phase 4.*
-- **Pas de persistance** — tout est perdu au redémarrage du backend, et le tampon est
-  borné à 2 000 paquets. *Phase 5.*
+- **Pas de persistance** — le schéma est écrit et éprouvé, mais le backend n'y écrit pas
+  encore : tout est perdu au redémarrage, et les tampons sont bornés (2 000 paquets,
+  2 000 communications). *Phase 5.*
+- **Les communications ICMP et ARP sont regroupées par adresses seulement.** Ces protocoles
+  n'ont pas de port : deux échanges ICMP entre les mêmes machines comptent donc comme une
+  seule communication, même s'il s'agit d'un ping et d'un message d'erreur distincts.
+  C'est une limite du regroupement par 5-uplet, imposé par l'énoncé.
+- **Une communication n'est décrite que par ce qui a été capturé.** Si l'agent démarre au
+  milieu d'une conversation, celle-ci est marquée incertaine — c'est honnête, mais cela
+  signifie qu'un rapport sur une courte capture contiendra beaucoup d'états incertains.
 - **Pas de déploiement** — tout tourne en local. *Phase 5.*
 - **Pas de mode replay** — le fichier `.pcap` n'est pas encore importable.
 - **Performance** — Scapy décode en Python pur. Sur un réseau domestique c'est sans

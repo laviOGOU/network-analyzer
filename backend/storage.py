@@ -51,6 +51,11 @@ class Stockage:
         self._premier: str | None = None
         self._dernier: str | None = None
 
+        # Communications, refondues par clé : l'agent revoit la même conversation
+        # évoluer, et la dernière version reçue est la bonne.
+        self._communications: dict[str, dict[str, Any]] = {}
+        self._communications_vues = 0
+
     # ------------------------------------------------------------------ écriture
     def enregistrer_lot(self, session: str, agent: str, paquets: list[dict[str, Any]]) -> int:
         """Enregistre un lot validé. Renvoie le nombre de paquets acceptés.
@@ -109,6 +114,34 @@ class Stockage:
             self._premier = self._premier or horodatage
             self._dernier = horodatage
 
+    def enregistrer_communications(self, communications: list[dict[str, Any]]) -> int:
+        """Refond les communications reçues, par clé.
+
+        On ne conserve pas tout indéfiniment : garder un nombre borné, les plus récentes
+        d'abord. Un tableau de bord vivant n'a pas besoin de l'intégralité de l'historique,
+        et laisser grossir le dictionnaire ferait exactement ce qu'on reproche aux
+        programmes qui fuient — en silence.
+        """
+        if not communications:
+            return 0
+        with self._verrou:
+            for communication in communications:
+                cle = communication.get("cle")
+                if not cle:
+                    continue
+                if cle not in self._communications:
+                    self._communications_vues += 1
+                self._communications[cle] = communication
+
+            # Élagage : on garde les plus récentes, et l'on compte celles qui sortent
+            # séparément (`_communications_vues` ne redescend jamais).
+            if len(self._communications) > self.taille_max:
+                triees = sorted(self._communications.items(),
+                                key=lambda element: element[1].get("dernier_paquet") or "",
+                                reverse=True)
+                self._communications = dict(triees[:self.taille_max])
+            return len(communications)
+
     def vider(self) -> None:
         """Remet le tampon et les compteurs à zéro. Utilisé par les tests.
 
@@ -128,6 +161,8 @@ class Stockage:
             self._par_port.clear()
             self._premier = None
             self._dernier = None
+            self._communications.clear()
+            self._communications_vues = 0
 
     # ------------------------------------------------------------------ lecture
     def paquets(self, limite: int = 100, protocole: str | None = None,
@@ -153,6 +188,28 @@ class Stockage:
 
         return list(reversed(paquets))[:max(0, limite)]
 
+    def communications(self, limite: int = 100, etat: str | None = None,
+                       protocole: str | None = None,
+                       recherche: str | None = None) -> list[dict[str, Any]]:
+        """Communications conservées, la plus récente d'abord."""
+        with self._verrou:
+            liste = list(self._communications.values())
+
+        if etat:
+            liste = [c for c in liste if (c.get("etat") or "").lower() == etat.lower()]
+        if protocole:
+            liste = [c for c in liste
+                     if (c.get("protocole") or "").lower() == protocole.lower()]
+        if recherche:
+            besoin = recherche.lower()
+            liste = [c for c in liste
+                     if besoin in f"{c.get('ip_a','')} {c.get('ip_b','')} "
+                                  f"{c.get('port_a','')} {c.get('port_b','')} "
+                                  f"{c.get('etat','')}".lower()]
+
+        liste.sort(key=lambda c: c.get("dernier_paquet") or "", reverse=True)
+        return liste[:max(0, limite)]
+
     def statistiques(self) -> dict[str, Any]:
         """Chiffres du tableau de bord, calculés ici et jamais par le navigateur."""
         with self._verrou:
@@ -169,6 +226,13 @@ class Stockage:
                 "dernier_paquet": self._dernier,
                 "analyses_partielles": self._analyses_partielles,
                 "sessions": len(self._sessions),
+                "communications_total": self._communications_vues,
+                "communications_conservees": len(self._communications),
+                "communications_par_etat": dict(
+                    Counter((c.get("etat") or "inconnue")
+                            for c in self._communications.values()).most_common()),
+                "communications_incertaines": sum(
+                    1 for c in self._communications.values() if not c.get("etat_certain")),
             }
 
     def session(self, identifiant: str) -> dict[str, Any] | None:

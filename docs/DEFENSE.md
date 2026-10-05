@@ -203,10 +203,173 @@ anonymisation des adresses internes.
 ## 7. Vérifications à montrer au jury
 
 ```
-.venv\Scripts\python.exe -m pytest tests/ -q          # 65 tests
+.venv\Scripts\python.exe -m pytest tests/ -q          # tests du parseur et de l'API
 .venv\Scripts\python.exe agent\main.py --interfaces   # que voit-on ?
 .venv\Scripts\python.exe agent\main.py --interface "Wi-Fi" --a-blanc
 ```
 
 Le mode `--a-blanc` est le plus utile à montrer : il prouve la capture et l'analyse sans
 backend et sans jeton. Si la démonstration échoue, c'est la première chose à refaire isolément.
+
+---
+
+# Phase 2 — Analyser et structurer
+
+## 1. Ce qui a été construit
+
+Deux choses, et une seule idée : **un paquet seul ne dit presque rien**.
+
+**Le regroupement en communications** (`agent/flows.py`) : les paquets sont rassemblés en
+conversations entre deux machines. Chaque communication porte son initiateur, sa durée,
+ses compteurs **par sens**, et un état déduit des indicateurs observés.
+
+**Le schéma de base de données** (`sql/schema.sql`) : six tables commentées, avec
+contraintes, index, sécurité au niveau des lignes et purge automatique. Il a été **exécuté
+et éprouvé** sur un PostgreSQL réel avant d'être confié à Supabase, et
+`sql/verifier-schema.sql` rejoue dix-sept contrôles de comportement.
+
+Mesures sur trafic réel : **540 paquets → 56 communications**, dont 3 avec ouverture
+complète observée (« établie »), 20 fermées, 31 en cours, 2 en tentative — et **18 marquées
+d'état incertain**.
+
+## 2. Les trois décisions qui portent tout le reste
+
+### La clé des communications est triée
+
+`(TCP, 93.184.216.34:443, 192.168.1.5:49703)` et
+`(TCP, 192.168.1.5:49703, 93.184.216.34:443)` désignent **la même conversation**.
+
+Sans ce tri, chaque connexion compterait deux fois — une pour l'aller, une pour le retour —
+et toutes les statistiques seraient fausses d'un facteur deux. Une seule ligne de code,
+et tout le reste en dépend.
+
+### L'incertitude est une donnée, pas une gêne
+
+Quand la capture commence au milieu d'une conversation, on n'a pas vu son ouverture. On ne
+peut donc pas affirmer qu'elle s'est établie normalement. La communication porte
+`etat_certain = false` et une phrase qui dit ce qui manque :
+
+> « Capture commencée après le début de cette communication : son ouverture n'a pas été
+> observée. »
+
+**C'est le champ le plus important du projet.** Il aurait été plus simple d'afficher
+« en cours » sans rien préciser : le tableau de bord aurait paru plus net, et il aurait
+menti. L'interface affiche cet état avec une pastille en pointillés et le texte complet.
+
+### La base refuse plutôt que d'espérer
+
+Trois exemples, tous vérifiés par `sql/verifier-schema.sql` :
+
+- une **adresse IP privée** ne peut pas entrer dans le cache d'enrichissement : une
+  contrainte SQL l'interdit, plutôt que de compter sur la vigilance du code Python ;
+- une **clé de communication en double** est refusée : c'est ce qui rend sans danger le
+  fait que l'agent renvoie la même conversation à chaque lot ;
+- une **alerte dont le niveau n'est ni « observation », ni « hypothèse », ni « alerte »**
+  est refusée : la distinction imposée par l'énoncé est protégée par le schéma, pas
+  seulement par la bonne volonté du développeur.
+
+## 3. Comment les fonctions communiquent
+
+```
+   capture ──▶ parser.analyser(paquet) ──▶ fiche
+                  │
+                  ▼
+           flows.SuiviCommunications.ajouter(fiche)
+                  │   crée ou met à jour la communication
+                  │   flows.maj_etat(communication)  ──▶ état + note + certitude
+                  ▼
+         file d'attente (sender.py)
+                  │   le lot porte les paquets ET les communications à jour
+                  ▼
+   POST /api/v1/ingest ──▶ models.py valide ──▶ storage.enregistrer_communications()
+                  │                                   (refonte par clé)
+                  ▼
+   GET /api/v1/flows ──▶ tableau de bord (vue Connections)
+```
+
+**Pourquoi les communications voyagent dans le même lot que les paquets** : elles
+décrivent ces paquets-là. Les envoyer séparément ouvrirait la porte à un affichage où une
+conversation apparaîtrait avant les paquets qui la composent.
+
+**Pourquoi l'agent renvoie les communications en cours à chaque lot** : elles évoluent.
+Le backend les refond par clé ; la dernière version reçue est la bonne. L'agent envoie
+aussi une dernière fois celles qui viennent de se terminer — sans quoi l'état final, le
+plus intéressant, ne partirait jamais.
+
+## 4. Cinq questions de défense probables
+
+### Q1. Pourquoi trier la clé plutôt que garder le sens de la conversation ?
+
+Parce que le regroupement et le sens sont deux besoins différents. Le regroupement demande
+une identité stable : c'est le rôle de la clé triée. Le sens demande de savoir qui a parlé
+le premier : c'est le rôle du champ `initiateur`, conservé séparément.
+
+Garder deux clés (une par sens) obligerait ensuite à les réunir pour chaque statistique —
+et toute réunion incomplète donnerait un chiffre faux.
+
+### Q2. Comment déduisez-vous l'état d'une connexion TCP ?
+
+À partir des indicateurs observés, et du fait qu'on a vu — ou non — le début :
+
+| Ce qui est observé | État | Certain ? |
+|---|---|---|
+| SYN seul | tentative | oui |
+| SYN seul, plus de 3 secondes | échec probable | oui |
+| SYN + SYN-ACK + ACK | établie | oui |
+| SYN + SYN-ACK, sans le 3ᵉ message | tentative | non |
+| Un FIN (un seul côté) | fermée | non |
+| Un FIN des deux côtés | fermée | oui |
+| Un RST | fermée | oui |
+| Première observation = un ACK ou des données | en cours | non |
+
+Le délai de trois secondes pour « échec probable » correspond au moment où une pile TCP
+réémet en général. Il n'est pas mesuré par rapport à l'horloge de la machine mais par
+rapport **au dernier paquet observé** : c'est ce qui rend le mode replay juste. Sinon,
+rejouer une capture d'hier ferait passer chaque SYN sans réponse pour un échec, alors que
+la réponse est peut-être dans le fichier.
+
+### Q3. Pourquoi 60 secondes pour TCP et 30 pour UDP ?
+
+Une connexion TCP inactive plus d'une minute est presque toujours morte, même sans FIN.
+UDP n'a pas de notion de connexion : un silence veut dire « c'est fini », et 30 secondes
+suffisent.
+
+Après un FIN ou un RST, on n'attend que **2 secondes** : la fin est explicite, et une
+nouvelle conversation entre les mêmes machines ne doit pas être confondue avec l'ancienne.
+
+Ces valeurs sont réglables (`par défaut : 60 / 30 / 2 secondes`), parce qu'elles dépendent
+du réseau observé. Sur un réseau lent, 60 secondes couperaient des conversations encore
+vivantes.
+
+### Q4. Pourquoi ne pas stocker tous les paquets en base ?
+
+Parce que ce serait absurde en pratique. Un foyer produit facilement 2 à 5 millions de
+paquets par jour ; à 300 octets de métadonnées par ligne, cela fait plus d'un gigaoctet
+quotidien, pour une information que personne ne relit.
+
+Le schéma conserve donc une ligne par paquet jusqu'à un plafond par communication, plus
+ceux qui portent un fait notable, et le reste est résumé dans les compteurs de `flows`.
+Le plafond est un réglage, pas une constante cachée.
+
+### Q5. La purge à trente jours : pourquoi, et comment est-elle garantie ?
+
+Parce que le tableau de bord est public : des adresses IP et des noms de domaines ne
+doivent pas s'accumuler indéfiniment.
+
+`analyzer.purger(30)` supprime les captures anciennes, et **tout le reste suit par
+cascade** — communications, paquets, alertes, explications. C'est la raison pour laquelle
+les clés étrangères ont été déclarées en `ON DELETE CASCADE` : un effacement de données
+doit être complet ou ne pas être. Le contrôle correspondant est dans
+`sql/verifier-schema.sql`, et il échoue si une seule ligne survit.
+
+## 5. Vérifications à montrer au jury
+
+```bat
+.venv\Scripts\python.exe -m pytest tests/ -q                     :: 103 tests
+psql -v ON_ERROR_STOP=1 -d analyzer_test -f sql/verifier-schema.sql :: 17 contrôles SQL
+```
+
+Puis, sur trafic réel : lancer le backend et l'agent, et observer la section
+**Connections** du tableau de bord. Les pastilles en pointillés sont les états incertains —
+celles qu'il faut savoir expliquer.
+

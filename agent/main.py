@@ -27,6 +27,7 @@ import os
 import signal
 import socket
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -37,6 +38,7 @@ if str(RACINE) not in sys.path:
     sys.path.insert(0, str(RACINE))
 
 from agent import capture as mod_capture          # noqa: E402
+from agent import flows as mod_flows              # noqa: E402
 from agent import sender as mod_sender            # noqa: E402
 
 
@@ -122,7 +124,9 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         client = mod_sender.ClientBackend(options.backend, options.jeton,
                                           nom_agent=options.nom, session="")
-        envoyeur = mod_sender.Envoyeur(client.envoyer)
+        # La destination joint les communications au lot de paquets correspondant.
+        envoyeur = mod_sender.Envoyeur(
+            lambda lot: client.envoyer(lot, communications=communications_a_transmettre()))
 
     # ------------------------------------------------------------------ interface
     try:
@@ -140,8 +144,40 @@ def main(argv: list[str] | None = None) -> int:
     if not options.a_blanc:
         client.session = session                     # rattache les lots à cette session
 
+    # Table des communications. `a_envoyer` contient les versions à transmettre : celles
+    # qui évoluent, et celles qui viennent de se terminer — sans quoi la dernière version
+    # d'une conversation, souvent la plus intéressante, ne partirait jamais.
+    table = mod_flows.SuiviCommunications()
+    a_envoyer: dict[str, dict] = {}
+    verrou = threading.Lock()      # accès partagé entre le fil de capture et celui d'envoi
+
     def sur_paquet(fiche: dict) -> None:
+        communication = table.ajouter(fiche)
+        if communication is not None:
+            communication = mod_flows.maj_etat(communication)
+            fiche_communication = communication.vers_dict()
+            with verrou:
+                a_envoyer[fiche_communication["cle"]] = fiche_communication
         envoyeur.ajouter(fiche)
+
+    def retirer_communications_terminees() -> None:
+        """Sort de la table les conversations terminées, et les garde à transmettre."""
+        for communication in table.retirer_terminées():
+            fiche_communication = communication.vers_dict()
+            with verrou:
+                a_envoyer[fiche_communication["cle"]] = fiche_communication
+
+    def communications_a_transmettre() -> list[dict]:
+        """Rend les communications en attente, évaluées à l'instant présent.
+
+        On copie puis on vide sous verrou : sans cela, un paquet arrivé pendant l'envoi
+        serait perdu, ou envoyé deux fois.
+        """
+        table.completer_etat()
+        with verrou:
+            en_attente = list(a_envoyer.values())
+            a_envoyer.clear()
+        return en_attente
 
     capteur = mod_capture.Capture(interface=interface, filtre=options.filtre,
                                   sur_paquet=sur_paquet)
@@ -176,28 +212,37 @@ def main(argv: list[str] | None = None) -> int:
             if options.duree and (time.monotonic() - debut) >= options.duree:
                 break
             time.sleep(0.5)
-            _afficher_avancement(capteur, envoyeur, debut, interface)
+            # Repère les SYN restés sans réponse : sans cet appel, leur état ne serait
+            # réévalué qu'à l'arrivée du paquet suivant — qui n'arrivera jamais.
+            retirer_communications_terminees()
+            _afficher_avancement(capteur, envoyeur, debut, interface, table)
     finally:
         signal.signal(signal.SIGINT, ancien)
         capteur.arreter()
+        retirer_communications_terminees()
         envoyeur.arreter(vider=True)
 
     print(f"\n\nCapture arrêtée.")
     print(f"  paquets capturés   : {capteur.recus}")
     print(f"  analyses partielles: {capteur.erreurs_analyse}")
     print(f"  {envoyeur.stats.resume()}")
+    resume = mod_flows.resume_chiffre(table.actives())
+    print(f"  communications     : {len(table.actives())} encore ouvertes "
+          f"· {resume['etats_incertains']} d'état incertain")
     if options.a_blanc:
         print(f"  (mode à blanc : {len(memoire.paquets)} paquets analysés, aucun envoi)")
     return 0
 
 
 def _afficher_avancement(capteur: mod_capture.Capture, envoyeur: mod_sender.Envoyeur,
-                         debut: float, interface: str) -> None:
+                         debut: float, interface: str,
+                         table: mod_flows.SuiviCommunications | None = None) -> None:
     """Une seule ligne réécrite sur place : lisible sans noyer le terminal."""
     ecoule = time.monotonic() - debut
     debit = capteur.recus / ecoule if ecoule > 0 else 0
     ligne = (f"\r  {ecoule:6.1f}s · capturés {capteur.recus:6d} ({debit:5.1f}/s) · "
              f"envoyés {envoyeur.stats.envoyes:6d} · file {envoyeur.stats.file:4d}"
+             + (f" · conversations {len(table.actives()):4d}" if table else "")
              + (f" · abandons {envoyeur.stats.abandonnes}" if envoyeur.stats.abandonnes else "")
              + (f" · échecs {envoyeur.stats.echecs}" if envoyeur.stats.echecs else ""))
     print(ligne[:140].ljust(140), end="", flush=True)

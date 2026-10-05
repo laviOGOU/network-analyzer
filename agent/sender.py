@@ -183,12 +183,19 @@ class ClientBackend:
         self.nom_agent = nom_agent
         self.session = session
 
-    def envoyer(self, lot: list[dict[str, Any]]) -> None:
-        """POST /api/v1/ingest. Lève en cas d'échec : l'appelant décide quoi en faire."""
+    def envoyer(self, lot: list[dict[str, Any]],
+                communications: list[dict[str, Any]] | None = None) -> None:
+        """POST /api/v1/ingest. Lève en cas d'échec : l'appelant décide quoi en faire.
+
+        Les communications voyagent dans le même lot que les paquets : elles décrivent
+        ces paquets-là. Les séparer ouvrirait la porte à un tableau de bord où une
+        conversation apparaîtrait avant les paquets qui la composent.
+        """
         charge = {
             "session": self.session,
             "agent": self.nom_agent,
             "paquets": lot,
+            "communications": communications or [],
         }
         reponse = httpx.post(
             f"{self.url}/api/v1/ingest",

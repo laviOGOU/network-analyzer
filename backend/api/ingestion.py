@@ -44,9 +44,12 @@ def ingerer(
         paquet["details"] = details_reduits(paquet.get("details") or {})
 
     acceptes = stockage.enregistrer_lot(lot.session, lot.agent, propres)
+    communications = stockage.enregistrer_communications(
+        [communication.model_dump() for communication in lot.communications])
     origine = request.client.host if request.client else "inconnue"
     logger.info("Lot reçu : %d paquets de %s (agent %s, origine %s)",
                 acceptes, lot.session, lot.agent, origine)
 
     return AccuseReception(acceptes=acceptes, session=lot.session,
-                           total_session=stockage.session(lot.session)["paquets"])
+                           total_session=stockage.session(lot.session)["paquets"],
+                           communications=communications)

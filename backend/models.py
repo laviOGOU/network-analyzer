@@ -22,7 +22,7 @@ import ipaddress
 from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 #: Longueurs maximales. Elles ne sont pas décoratives : sans elles, un agent (ou un
 #: imposteur muni d'un jeton) pourrait envoyer un champ de plusieurs mégaoctets, répété
@@ -101,6 +101,68 @@ class FichePaquet(BaseModel):
         return valeur
 
 
+class Communication(BaseModel):
+    """Une communication entre deux machines, telle que l'agent la transmet.
+
+    L'état (`etat`) est **calculé par l'agent**, pas par le backend : c'est l'agent qui a
+    vu les paquets dans l'ordre et qui sait ce qu'il a observé ou non. Le backend le
+    conserve et l'affiche, il ne le réinvente pas.
+
+    `etat_certain` est le champ le plus important du modèle. Une communication vue en
+    cours de route ne peut pas être décrite avec assurance : le drapeau le dit, et
+    l'interface s'en sert pour présenter la nuance.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    cle: Annotated[str, Field(min_length=1, max_length=180)]
+    protocole: Annotated[str, Field(max_length=MAX_TEXTE_COURT)] = "inconnu"
+    ip_a: Annotated[str, Field(max_length=45)]
+    ip_b: Annotated[str, Field(max_length=45)]
+    port_a: Port | None = None
+    port_b: Port | None = None
+    initiateur: Annotated[str, Field(max_length=45)] = ""
+
+    vu_depuis_le_debut: bool = False
+    debut: Annotated[str, Field(max_length=40)] = ""
+    dernier_paquet: Annotated[str, Field(max_length=40)] = ""
+    termine_le: Annotated[str, Field(max_length=40)] | None = None
+    duree_secondes: Annotated[float, Field(ge=0, le=86_400)] = 0
+
+    paquets_a_vers_b: Annotated[int, Field(ge=0)] = 0
+    paquets_b_vers_a: Annotated[int, Field(ge=0)] = 0
+    paquets_total: Annotated[int, Field(ge=0)] = 0
+    octets_a_vers_b: Annotated[int, Field(ge=0)] = 0
+    octets_b_vers_a: Annotated[int, Field(ge=0)] = 0
+    octets_total: Annotated[int, Field(ge=0)] = 0
+
+    indicateurs: Annotated[str, Field(max_length=64)] = ""
+    etat: Annotated[str, Field(max_length=MAX_TEXTE_COURT)] = "inconnue"
+    etat_certain: bool = False
+    note_etat: Annotated[str, Field(max_length=MAX_TEXTE)] = ""
+
+    @field_validator("ip_a", "ip_b", mode="after")
+    @classmethod
+    def _adresse_valide(cls, valeur: str) -> str:
+        try:
+            return str(ipaddress.ip_address(valeur))
+        except ValueError as erreur:
+            raise ValueError(f"adresse IP invalide : {valeur!r}") from erreur
+
+    @model_validator(mode="after")
+    def _totaux_coherents(self) -> "Communication":
+        """Les totaux doivent correspondre à la somme des deux sens.
+
+        Un total incohérent signalerait un défaut de calcul côté agent. Le refuser à
+        l'entrée vaut mieux que d'afficher un chiffre faux dans le tableau de bord.
+        """
+        if self.paquets_total != self.paquets_a_vers_b + self.paquets_b_vers_a:
+            raise ValueError("paquets_total ne correspond pas à la somme des deux sens")
+        if self.octets_total != self.octets_a_vers_b + self.octets_b_vers_a:
+            raise ValueError("octets_total ne correspond pas à la somme des deux sens")
+        return self
+
+
 class LotPaquets(BaseModel):
     """Un lot transmis par l'agent : la session de capture, l'agent, et les paquets."""
 
@@ -110,6 +172,12 @@ class LotPaquets(BaseModel):
     agent: Annotated[str, Field(min_length=1, max_length=120)] = "agent-local"
     paquets: Annotated[list[FichePaquet], Field(min_length=1, max_length=1000)]
 
+    #: Communications décrites par l'agent dans le même lot. Elles sont refondues par clé
+    #: à chaque réception : la dernière version reçue est la bonne, puisque l'agent voit
+    #: la conversation évoluer.
+    communications: Annotated[list[Communication], Field(max_length=2000)] = Field(
+        default_factory=list)
+
 
 class AccuseReception(BaseModel):
     """Réponse à un lot. Le compte renvoyé permet à l'agent de détecter une perte."""
@@ -117,6 +185,8 @@ class AccuseReception(BaseModel):
     acceptes: int
     session: str
     total_session: int
+    #: Nombre de communications prises en compte dans ce lot (phase 2).
+    communications: int = 0
 
 
 class Statistiques(BaseModel):
@@ -131,3 +201,7 @@ class Statistiques(BaseModel):
     premier_paquet: datetime | None = None
     dernier_paquet: datetime | None = None
     analyses_partielles: int = 0
+    #: Chiffres sur les communications (phase 2).
+    communications_total: int = 0
+    communications_par_etat: dict[str, int] = Field(default_factory=dict)
+    communications_incertaines: int = 0

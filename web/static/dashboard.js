@@ -308,10 +308,114 @@
     if (enregistre) appliquerTheme(enregistre);
   } catch (erreur) { /* mode privé : on garde le thème par défaut */ }
 
+  /* ------------------------------------------------------------- partage
+     Les mises en forme sont exposées : le module des communications est une autre
+     fermeture et ne peut pas les voir. Les recopier créerait deux formats de taille qui
+     divergeraient à la première correction. */
+  window.formaterOctets = formaterOctets;
+  window.formaterNombre = formaterNombre;
+  window.formaterHeure = formaterHeure;
+
   /* ------------------------------------------------------------- démarrage */
   chargerSessions();
   charger();
   boucle();
   // Les sessions changent rarement : les rafraîchir toutes les quinze secondes suffit.
   setInterval(chargerSessions, 15000);
+})();
+
+/* =============================================================================
+   Communications (Connections) — phase 2
+   -----------------------------------------------------------------------------
+   Rafraîchies moins souvent que les paquets : une conversation évolue en secondes, pas
+   en dixièmes de seconde. Interroger à la même cadence que les paquets ferait quatre
+   fois plus de requêtes pour un affichage identique.
+   ============================================================================= */
+(function () {
+  "use strict";
+
+  const PERIODE_COMMUNICATIONS = 3000;
+
+  const zone = {
+    corps: document.getElementById("corps-communications"),
+    vide: document.getElementById("communications-vide"),
+    gabarit: document.getElementById("gabarit-communication"),
+    filtre: document.getElementById("filtre-etat"),
+  };
+  if (!zone.corps || !zone.gabarit) return;
+
+  let enVol = false;
+
+  function formaterDuree(secondes) {
+    if (secondes === null || secondes === undefined) return "—";
+    if (secondes < 1) return `${Math.round(secondes * 1000)} ms`;
+    if (secondes < 60) return `${secondes.toFixed(1).replace(".", ",")} s`;
+    const minutes = Math.floor(secondes / 60);
+    return `${minutes} min ${Math.round(secondes % 60)} s`;
+  }
+
+  function extremite(ip, port) {
+    return port === null || port === undefined ? ip : `${ip}:${port}`;
+  }
+
+  function rendre(communications) {
+    zone.corps.textContent = "";
+    if (!communications.length) {
+      zone.vide.hidden = false;
+      return;
+    }
+    zone.vide.hidden = true;
+
+    const fragment = document.createDocumentFragment();
+    for (const c of communications) {
+      const ligne = zone.gabarit.content.firstElementChild.cloneNode(true);
+
+      const etat = ligne.querySelector(".pastille-etat");
+      etat.textContent = c.etat;
+      etat.dataset.etat = c.etat;
+      etat.dataset.certain = c.etat_certain ? "oui" : "non";
+      etat.title = c.etat_certain
+        ? "État observé directement"
+        : "État déduit : la capture n'a pas vu le début de cette communication";
+
+      const protocole = ligne.querySelector(".pastille-protocole");
+      protocole.textContent = c.protocole;
+      protocole.dataset.protocole = c.protocole;
+
+      ligne.querySelector(".col-extremite-a").textContent = extremite(c.ip_a, c.port_a);
+      ligne.querySelector(".col-extremite-b").textContent = extremite(c.ip_b, c.port_b);
+      ligne.querySelector(".col-echanges").textContent =
+        `${c.paquets_a_vers_b} → ${c.paquets_b_vers_a}`;
+      ligne.querySelector(".col-volume").textContent =
+        `${formaterOctets(c.octets_a_vers_b)} → ${formaterOctets(c.octets_b_vers_a)}`;
+      ligne.querySelector(".col-duree").textContent = formaterDuree(c.duree_secondes);
+      ligne.querySelector(".col-note").textContent = c.note_etat || "";
+
+      fragment.appendChild(ligne);
+    }
+    zone.corps.appendChild(fragment);
+  }
+
+  async function charger() {
+    if (enVol || document.hidden) return;
+    enVol = true;
+    try {
+      const parametres = new URLSearchParams({ limite: "150" });
+      if (zone.filtre.value) parametres.set("etat", zone.filtre.value);
+      const reponse = await fetch(`/api/v1/flows?${parametres}`,
+                                  { headers: { Accept: "application/json" } });
+      if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
+      const donnees = await reponse.json();
+      rendre(donnees.communications || []);
+    } catch (erreur) {
+      // On ne vide pas le tableau : l'indicateur principal signale déjà la panne.
+      console.warn("Communications non rafraîchies :", erreur.message);
+    } finally {
+      enVol = false;
+    }
+  }
+
+  zone.filtre.addEventListener("change", charger);
+  charger();
+  setInterval(charger, PERIODE_COMMUNICATIONS);
 })();

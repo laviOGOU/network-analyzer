@@ -319,3 +319,25 @@ main {
   .tableau th:nth-child(7), .tableau td:nth-child(7) { display: none; }
   .tableau th, .tableau td { padding: .45rem .55rem; font-size: .82rem; }
 }
+
+/* ------------------------------------------------------- état des communications
+   La couleur ne porte jamais seule l'information : le libellé de l'état est écrit, et
+   l'incertitude est signalée par un texte et un style, pas seulement par une teinte.
+   Environ un homme sur douze distingue mal certaines couleurs. */
+.pastille-etat {
+  display: inline-block; padding: .1rem .5rem; border-radius: 999px;
+  font-size: .76rem; font-weight: 600; white-space: nowrap;
+  background: var(--surface-2); color: var(--texte-doux); border: 1px solid var(--bord);
+}
+.pastille-etat[data-etat="établie"]        { color: var(--succes);    border-color: var(--succes); }
+.pastille-etat[data-etat="en cours"]       { color: var(--accent);    border-color: var(--accent); }
+.pastille-etat[data-etat="fermée"]         { color: var(--texte-faible); }
+.pastille-etat[data-etat="tentative"]      { color: var(--attention); border-color: var(--attention); }
+.pastille-etat[data-etat="échec probable"] { color: var(--danger);    border-color: var(--danger); }
+
+/* L'incertitude se voit : bordure pointillée, et un texte explicite dans la colonne
+   de droite. Un état incertain présenté comme les autres serait un mensonge par
+   présentation. */
+.pastille-etat[data-certain="non"] { border-style: dashed; }
+.pastille-etat[data-certain="non"]::after { content: " ?"; font-weight: 700; }
+.col-note { white-space: normal; min-width: 16rem; color: var(--texte-doux); }
