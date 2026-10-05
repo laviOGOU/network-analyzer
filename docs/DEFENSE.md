@@ -1461,3 +1461,54 @@ Supprimez-en un avant d'en ajouter. » Un refus muet laisserait croire à une pa
   refusait donc « Conversations terminées » (`etat:fermée`), un profil parfaitement légitime.
   Une validation plus stricte que ce qu'elle valide interdit des choses qui marchent : c'est un
   défaut, pas de la prudence.
+
+
+---
+
+# Présentation — trois zones nommées, comme dans les outils de référence
+
+## Ce qui a changé
+
+La vue des paquets est désormais organisée en **trois zones qui se lisent ensemble**, et qui
+portent les noms attendus :
+
+- **Liste des paquets** — le tableau (heure, protocole, source, destination, détail, taille) ;
+- **Détail du paquet sélectionné** — l'arbre des couches, chacune avec sa phrase de rôle ;
+- **Contenu du paquet — octets des en-têtes** — les octets, avec `??` là où l'outil n'extrait
+  rien.
+
+Le volet du détail n'est plus une fenêtre qui s'ouvre : il est **visible en permanence** et se
+remplit. Quand rien n'est sélectionné, il affiche un message d'attente qui dit quoi faire.
+
+## Pourquoi ce changement
+
+Le contenu était le même, mais il fallait **ouvrir une fenêtre** pour le voir, puis la fermer
+pour revenir à la liste — obligeant à retenir ce qu'on venait de quitter. Une analyse se fait
+en comparant ce qu'on lit à ce qu'on voit : les trois zones doivent être à l'écran ensemble.
+
+## Un défaut trouvé en vérifiant
+
+Le titre du volet était **écrasé à chaque sélection** par la description du paquet
+(`Paquet ARP — 192.168.1.116 → 192.168.1.1`). L'étiquette « Détail du paquet sélectionné »
+disparaissait donc dès le premier clic — et une zone sans nom ne se reconnaît plus d'un coup
+d'œil, ce qui est exactement ce qu'on cherchait ici. Le titre est maintenant **fixe** : il
+nomme la zone ; le paquet est décrit sur la ligne suivante.
+
+C'est un contrôle automatique qui l'a montré, en comparant les titres réellement affichés aux
+noms attendus — pas une relecture à l'œil.
+
+## Deux questions de défense
+
+**1. Pourquoi un volet permanent plutôt qu'une fenêtre ?**
+
+Parce qu'analyser consiste à confronter deux choses : la ligne dans la liste et le détail du
+paquet. Si les deux ne sont jamais à l'écran ensemble, chaque comparaison demande deux
+actions — et l'attention se perd entre les deux. Les trois zones empilées sont précisément ce
+qui rend cette confrontation immédiate.
+
+**2. Pourquoi garder l'étiquette fixe au-dessus du détail ?**
+
+Parce qu'une zone doit dire ce qu'elle est, pas ce qu'elle contient. Le titre « Détail du
+paquet sélectionné » indique la nature du contenu **avant** qu'on ait cliqué : un lecteur qui
+découvre l'écran sait à quoi sert le volet vide. Un titre qui décrit le contenu ne renseigne
+que ceux qui savent déjà.

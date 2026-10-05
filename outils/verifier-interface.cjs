@@ -278,7 +278,8 @@ function verifier(intitule, condition, precision = "") {
   await page.locator("#titre-paquets").scrollIntoViewIfNeeded();
   await page.waitForTimeout(500);
   await page.locator("#corps-paquets .bouton-couches").first().click();
-  await page.waitForSelector("#paquet-detail:not([hidden])", { timeout: 8000 });
+  // C'est **le contenu** qui apparaît, pas le panneau : il est visible en permanence.
+  await page.waitForSelector("#paquet-detail-contenu:not([hidden])", { timeout: 8000 });
   await page.waitForTimeout(400);
 
   const nbCouches = await page.locator("#paquet-couches .couche").count();
@@ -298,11 +299,31 @@ function verifier(intitule, condition, precision = "") {
   await page.locator("#paquet-detail").screenshot(
     { path: chemin.join(dossier, "08-couches.png") });
 
+  // Les trois zones portent les noms qu'un lecteur — ou un jury — s'attend à trouver, les
+  // mêmes que dans les outils de référence.
+  const titres = await page.evaluate(() => ({
+    liste: (document.getElementById("titre-paquets").textContent || "").trim(),
+    detail: (document.getElementById("paquet-detail-titre").textContent || "").trim(),
+    sections: [...document.querySelectorAll(".couches-titre")].map((n) => n.textContent.trim()),
+  }));
+  verifier("les trois zones portent les noms attendus",
+    /liste des paquets/i.test(titres.liste)
+    && /détail du paquet sélectionné/i.test(titres.detail)
+    && titres.sections.some((t) => /contenu du paquet/i.test(t)),
+    `${titres.liste} · ${titres.detail} · ${titres.sections.join(" | ")}`);
+
   await page.keyboard.press("Escape");
-  // `waitForSelector` attend la **visibilité** par défaut : un élément caché ne peut donc
-  // jamais la satisfaire. On demande explicitement l'état caché.
-  await page.waitForSelector("#paquet-detail", { state: "hidden", timeout: 5000 });
-  verifier("Échap ferme le détail du paquet", true);
+  // Le détail n'est plus une fenêtre qu'on ferme, mais un volet qu'on vide : Échap efface la
+  // sélection et laisse le message d'attente. Le panneau, lui, reste à l'écran.
+  await page.waitForSelector("#paquet-detail-contenu", { state: "hidden", timeout: 5000 });
+  const volet = await page.evaluate(() => ({
+    visible: !document.getElementById("paquet-detail").hidden,
+    attente: !document.getElementById("paquet-detail-vide").hidden,
+    couches: document.querySelectorAll("#paquet-couches .couche").length,
+  }));
+  verifier("Échap vide le détail sans le faire disparaître",
+    volet.visible && volet.attente && volet.couches === 0,
+    `volet visible=${volet.visible} attente=${volet.attente} couches=${volet.couches}`);
 
   // L'export : un lien de téléchargement, qui suit le filtre courant.
   const lienExport = await page.locator("#export-communications-csv").getAttribute("href");

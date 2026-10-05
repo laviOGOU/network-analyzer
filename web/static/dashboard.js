@@ -1069,8 +1069,25 @@ function signalerCriteresEcartes(champs) {
     avertissement: document.getElementById("paquet-hex-avertissement"),
     hex: document.getElementById("paquet-hex"),
     fermer: document.getElementById("paquet-detail-fermer"),
+    vide: document.getElementById("paquet-detail-vide"),
+    contenu: document.getElementById("paquet-detail-contenu"),
   };
   if (!zone.panneau) return;
+
+  // Le panneau reste visible en permanence : c'est un volet, pas une fenêtre. Ces deux
+  // fonctions basculent entre le message d'attente et le contenu — jamais entre visible et
+  // caché, sinon il faudrait retenir ce qu'on vient de quitter.
+  function montrerAttente() {
+    if (zone.vide) zone.vide.hidden = false;
+    if (zone.contenu) zone.contenu.hidden = true;
+  }
+
+  function montrerContenu() {
+    if (zone.vide) zone.vide.hidden = true;
+    if (zone.contenu) zone.contenu.hidden = false;
+  }
+
+  montrerAttente();
 
   let connaissance = null;
   let paquetCourant = null;
@@ -1186,7 +1203,7 @@ function signalerCriteresEcartes(champs) {
         if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
         connaissance = await reponse.json();
       } catch (erreur) {
-        zone.panneau.hidden = false;
+        montrerContenu();
         zone.titre.textContent = "Description des couches indisponible";
         zone.resume.textContent = `La demande a échoué : ${erreur.message}`;
         return;
@@ -1194,22 +1211,33 @@ function signalerCriteresEcartes(champs) {
     }
 
     paquetCourant = paquet;
-    zone.titre.textContent = `Paquet ${paquet.protocole || ""} — `
-      + `${paquet.ip_source || "?"} → ${paquet.ip_destination || "?"}`;
-    zone.resume.textContent = `${paquet.taille || "?"} octets · TTL ${paquet.ttl ?? "?"}`
+    // Le titre reste **fixe** : il nomme la zone, il ne décrit pas son contenu. Écrasé à
+    // chaque sélection, il faisait disparaître l'étiquette — et une zone sans nom ne se
+    // reconnaît plus d'un coup d'œil, ce qui est justement ce qu'on cherche ici. Le paquet
+    // est décrit sur la ligne suivante.
+    zone.resume.textContent = `${paquet.protocole || "Paquet"} `
+      + `${paquet.ip_source || "?"} → ${paquet.ip_destination || "?"}`
+      + ` · ${paquet.taille || "?"} octets · TTL ${paquet.ttl ?? "?"}`
       + (paquet.flags_tcp ? ` · indicateurs ${paquet.flags_tcp}` : "")
       + (paquet.analyse_partielle ? " · analyse partielle, voir le motif ci-dessus" : "");
     zone.avertissement.textContent = connaissance.avertissement_hex;
 
     rendreCouches(paquet);
     rendreHex(paquet);
-    zone.panneau.hidden = false;
+    // Le volet ne s'ouvre pas : il se remplit. Et le focus n'est plus déplacé — il n'y a
+    // rien à annoncer, puisque la zone était déjà à l'écran. Voler le focus de la ligne
+    // qu'on vient de cliquer ferait perdre sa place à qui navigue au clavier.
+    montrerContenu();
     boutonOrigine = bouton;
-    zone.fermer.focus();
   }
 
   function fermer() {
-    zone.panneau.hidden = true;
+    montrerAttente();
+    zone.couches.textContent = "";
+    zone.hex.textContent = "";
+    zone.resume.textContent = "";
+    zone.avertissement.textContent = "";
+    paquetCourant = null;
     if (boutonOrigine) { boutonOrigine.focus(); boutonOrigine = null; }
   }
 

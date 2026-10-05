@@ -133,6 +133,19 @@
    Des barres plutôt qu'une bibliothèque de graphiques : la même information, lisible par
    un lecteur d'écran (le chiffre est écrit à côté), et pas une dépendance de plus à
    charger et à maintenir. */
+/* Le détail d'un paquet est un panneau permanent, pas une fenêtre : les trois zones se
+   lisent ensemble, comme dans les outils de référence. */
+.detail-vide {
+  color: var(--texte-doux);
+  border: 1px dashed var(--bordure);
+  border-radius: .4rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  margin: 0;
+}
+
+#paquet-detail-contenu[hidden] { display: none; }
+
 /* Le sélecteur de profils. Il remplit le champ de filtre au lieu de filtrer dans son coin :
    ce qui s'applique reste visible et modifiable. */
 .choix-profil {

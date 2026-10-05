@@ -388,6 +388,18 @@ sur des adresses IPv6 que personne ne lit.
 l'adresse est le fait vérifiable. Une adresse partagée par plusieurs noms reçoit le plus
 récemment observé, et l'outil le dit « d'après le DNS ».
 
+## Trois zones, comme dans les outils de référence
+
+La vue des paquets se lit d'un seul regard, en trois zones **nommées et visibles ensemble** :
+
+- **Liste des paquets** — heure, protocole, source, destination, détail, taille ;
+- **Détail du paquet sélectionné** — l'arbre des couches, chacune avec sa phrase de rôle ;
+- **Contenu du paquet — octets des en-têtes** — les octets, `??` là où rien n'est extrait.
+
+Le volet du détail n'est pas une fenêtre à ouvrir : il est **visible en permanence** et se
+remplit. Vide, il dit quoi faire. Analyser consiste à confronter la ligne et le détail — si
+les deux ne sont jamais à l'écran ensemble, chaque comparaison coûte deux actions.
+
 ## Filtrer, détailler, exporter
 
 **Le filtre d'affichage** s'écrit `champ:valeur`, et plusieurs critères se cumulent :
@@ -509,7 +521,7 @@ from backend.explain import explications     # toutes les explications applicabl
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**375 tests**, dont :
+**375 tests** · **45 vérifications navigateur**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole

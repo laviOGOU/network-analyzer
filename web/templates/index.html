@@ -301,18 +301,34 @@
     </div>
   </section>
 
-  {# Détail d'un paquet : les couches avec leur rôle, puis les octets reconstruits. #}
-  <div class="paquet-detail" id="paquet-detail" hidden>
+  {# Détail d'un paquet : les couches avec leur rôle, puis les octets reconstruits.
+
+     Trois zones, visibles ensemble et nommées comme dans les outils de référence : la liste
+     des paquets, le détail du paquet sélectionné, le contenu du paquet. Les empiler dans une
+     fenêtre qu'il faut ouvrir obligerait à retenir ce qu'on vient de quitter. #}
+  <div class="paquet-detail" id="paquet-detail" aria-labelledby="paquet-detail-titre">
     <div class="detail-entete">
-      <h3 id="paquet-detail-titre">Détail du paquet</h3>
-      <button type="button" class="bouton bouton--fantome" id="paquet-detail-fermer">Fermer</button>
+      <h3 id="paquet-detail-titre">Détail du paquet sélectionné</h3>
+      <button type="button" class="bouton bouton--fantome" id="paquet-detail-fermer">
+        Vider la sélection
+      </button>
     </div>
-    <p class="aide" id="paquet-detail-resume"></p>
-    <h4 class="couches-titre">Les couches, de la plus basse à la plus haute</h4>
-    <div id="paquet-couches"></div>
-    <h4 class="couches-titre">Octets des en-têtes</h4>
-    <p class="aide" id="paquet-hex-avertissement"></p>
-    <pre class="hex" id="paquet-hex"></pre>
+
+    <p class="detail-vide" id="paquet-detail-vide">
+      Cliquez un paquet dans la liste ci-dessus : ses couches et ses octets s'afficheront ici.
+      Dans la liste, la colonne « Détail » et le bouton « Couches » mènent au même endroit.
+    </p>
+
+    <div id="paquet-detail-contenu">
+      <p class="aide" id="paquet-detail-resume"></p>
+
+      <h4 class="couches-titre">Les couches, de la plus basse à la plus haute</h4>
+      <div id="paquet-couches"></div>
+
+      <h4 class="couches-titre">Contenu du paquet — octets des en-têtes</h4>
+      <p class="aide" id="paquet-hex-avertissement"></p>
+      <pre class="hex" id="paquet-hex"></pre>
+    </div>
   </div>
 
   <div class="paquet-detail" id="recit-detail" hidden aria-labelledby="recit-titre">
@@ -339,7 +355,7 @@
 
   <section aria-labelledby="titre-paquets">
     <div class="titre-section--ligne">
-      <h2 id="titre-paquets" class="titre-section">Packets</h2>
+      <h2 id="titre-paquets" class="titre-section">Liste des paquets</h2>
       <div class="filtres">
         <label class="sr-only" for="filtre-protocole">Filtrer par protocole</label>
         <select id="filtre-protocole">
