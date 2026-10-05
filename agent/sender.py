@@ -31,6 +31,8 @@ from typing import Any, Callable
 
 import httpx
 
+from agent import processus
+
 logger = logging.getLogger(__name__)
 
 #: Au-delà de ce nombre de paquets en attente, les plus anciens sont abandonnés.
@@ -73,6 +75,11 @@ class Envoyeur:
     def __init__(self, destination: Callable[[list[dict[str, Any]]], None]) -> None:
         self.destination = destination
         self.stats = Statistiques()
+        # La table des processus est gardée quelques secondes et partagée par tous les
+        # paquets : interroger le système à chaque paquet serait ruineux — trois mille
+        # appels par capture — et inutile, les connexions ne changeant pas d'une seconde
+        # à l'autre.
+        self._noms = processus.TableCachee()
         self._file: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=TAILLE_FILE)
         self._arret = threading.Event()
         self._fil: threading.Thread | None = None
@@ -102,6 +109,16 @@ class Envoyeur:
         Une exception ici remonterait dans le fil de capture de Scapy et arrêterait la
         capture : inacceptable.
         """
+        # Le processus qui tient le port local est ajouté ici : c'est le dernier moment où
+        # la fiche est encore fraîche, et le seul endroit par lequel **tous** les paquets
+        # passent. Après la mise en file, la fiche appartient au fil d'envoi.
+        try:
+            self._noms.enrichir(fiche)
+        except Exception:                                # noqa: BLE001
+            # Nommer un programme est un confort : son échec ne doit jamais coûter un paquet
+            # ni arrêter la capture.
+            pass
+
         self.stats.recus += 1
         try:
             self._file.put_nowait(fiche)

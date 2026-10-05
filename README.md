@@ -278,6 +278,22 @@ connexions abandonnées.
 n'interroge que des adresses publiques — jamais 192.168.x, 10.x ou fe80::, qu'aucun service
 tiers ne peut renseigner et qui décriraient votre réseau local à un tiers.
 
+## Quel programme parle
+
+Le module `agent/processus.py` associe un port local au programme qui le tient, et
+l'interface l'affiche en tête de la colonne « Détail ». Le côté local se détermine par
+l'**adresse**, jamais par le port seul : le port 443 est tenu par le navigateur *et* par le
+serveur distant.
+
+**⚠️ Fonctionnalité non aboutie.** Sur quatre captures réelles, **aucune fiche n'a porté de
+nom de programme**, alors que le mécanisme fonctionne au niveau unitaire. La cause probable :
+la table des connexions est un instantané gardé cinq secondes, et une connexion qui vit moins
+d'une seconde a disparu quand le paquet est analysé. L'affichage reste correct sans elle —
+mais ne pas compter sur cette information tant qu'elle n'a pas été mesurée.
+
+Sans droits administrateur, Windows ne donne pas le propriétaire d'environ un tiers des
+connexions : ces paquets ne seront jamais nommés, et rien n'est inventé pour combler le vide.
+
 ## Répartitions, machines actives, débit
 
 `GET /api/v1/statistiques` rend trois vues calculées sur les paquets relus :
@@ -541,6 +557,11 @@ Dix scénarios manuels, avec leur résultat attendu, sont décrits dans
 Rédigées honnêtement, comme demandé. **Aucune de ces limites n'est cachée par le code :
 ce qui n'est pas fait n'est pas simulé.**
 
+- **L'association port → processus n'a produit aucun résultat sur trafic réel** (voir la
+  section correspondante). Livrée, testée au niveau unitaire, non concluante en conditions
+  réelles — la cause probable est la durée de vie des connexions face à la validité du cache.
+- **Un tiers des connexions n'a pas de processus connu** sans droits administrateur. C'est
+  une limite de Windows, pas un défaut de l'outil.
 - **Le graphique de débit n'a pas d'axe des temps.** Chaque barre porte son décalage en
   secondes au survol, mais un pic ne peut pas être daté sans survoler. Suffisant pour repérer
   une accélération, insuffisant pour la situer.

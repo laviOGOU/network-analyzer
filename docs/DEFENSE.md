@@ -1286,3 +1286,89 @@ raison coûte plus cher qu'il ne rapporte, puisqu'il apprend à ignorer les éch
 Le graphique de débit n'affiche pas d'axe des temps : chaque barre porte son décalage en
 secondes au survol, mais l'œil ne peut pas situer un pic dans le temps sans survoler. C'est
 suffisant pour repérer une accélération, insuffisant pour la dater — et c'est noté comme tel.
+
+
+---
+
+# Lot C — Port → processus : état réel
+
+## 1. Ce qui a été construit
+
+`agent/processus.py` associe un port local au programme qui le tient, à partir de
+`psutil.net_connections()`. L'enrichissement se fait dans `Envoyeur.ajouter()` — le seul
+point par lequel **tous** les paquets passent, et le dernier moment où la fiche est fraîche.
+L'interface affiche le programme **en tête** de la colonne « Détail ».
+
+**Ce que cette machine autorise, mesuré et non supposé** : sans droits administrateur,
+Windows laisse lire les connexions de l'utilisateur courant. Relevé ici : **313 connexions
+lues, 202 avec un processus identifié, 111 sans**. Un tiers du trafic ne sera jamais nommé —
+ce n'est pas un défaut à corriger, c'est une limite du système. L'interface n'écrit jamais
+« inconnu » pour combler le vide.
+
+## 2. Ce qui est PROUVÉ
+
+- **15 tests** couvrent la détermination du côté local, la construction de la table, la
+  normalisation des adresses et la dégradation sans `psutil`.
+- **Le mécanisme fonctionne**, vérifié directement : sur une connexion locale réelle,
+  `Envoyeur.ajouter()` pose `{'processus_local': 'svchost.exe', 'processus_pid': 1848}`.
+- **La propriété centrale est testée** : le port 443 est tenu par `chrome.exe` *et* par le
+  serveur distant. Le côté local se détermine par l'**adresse**, jamais par le port seul —
+  sinon on nommerait le mauvais programme une fois sur deux.
+
+## 3. Ce qui n'est PAS prouvé — et je ne le présenterai pas autrement
+
+**Sur quatre captures réelles, aucune fiche n'a porté de nom de programme.** Le mécanisme
+est juste au niveau unitaire et directement démontrable, mais il ne produit rien sur le
+trafic réel. La cause exacte n'est pas établie.
+
+L'explication la plus probable, et elle est cohérente avec ce que le module fait : **la table
+est un instantané gardé cinq secondes**, alors que les connexions observées vivent souvent
+moins d'une seconde. Au moment où le paquet est analysé, la connexion est déjà close, et son
+port n'est plus dans la table. Une connexion persistante — messagerie, éditeur de code,
+navigation — devrait être nommée ; un aller-retour bref, non.
+
+Tant que ce n'est pas mesuré, l'affichage du programme reste une fonctionnalité
+**inutilisable**, et le README le dit.
+
+## 4. Deux défauts trouvés en écrivant cette partie
+
+- **La comparaison d'adresses se faisait sur des chaînes.** Une même IPv6 s'écrit de
+  plusieurs façons ; `fe80::1` et `fe80:0:0:0:0:0:0:1` désignent la même interface. La table
+  était construite, les paquets passaient, **aucune correspondance n'avait lieu — sans le
+  moindre message d'erreur**. Le trafic de cette machine étant très majoritairement en IPv6,
+  le module était muet presque partout. Les deux côtés sont désormais normalisés, et un test
+  le verrouille.
+- **Mon propre test injectait une table vide**, que le cache considérait comme absente et
+  reconstruisait — en écrasant celle du test. Un dictionnaire vide est faux en Python : le
+  test ne testait rien.
+
+## 5. Trois questions de défense
+
+**1. Pourquoi cette fonctionnalité est-elle dans l'outil si elle ne marche pas ?**
+
+Parce qu'elle marche au niveau du mécanisme, et que sa limite est mesurable — ce qui reste
+la meilleure position : on sait exactement ce qui est prouvé et ce qui ne l'est pas. La
+présenter comme acquise serait la faute ; la retirer priverait l'outil de la seule
+information qui réponde à « que fait cette machine ? ». Elle est livrée avec sa limite
+écrite, et l'affichage reste correct sans elle.
+
+**2. Lire la table des connexions du système, n'est-ce pas intrusif ?**
+
+C'est une lecture locale, faite par un programme qui tourne déjà sur la machine, avec les
+droits de l'utilisateur qui l'a lancé. Aucune donnée ne quitte le poste, et le système
+refuse de lui-même ce que l'utilisateur n'a pas le droit de voir — un tiers des connexions
+ici. C'est la différence entre observer ce qu'on a le droit de voir et forcer une porte.
+
+**3. Pourquoi ne pas interroger le système à chaque paquet, pour ne rien manquer ?**
+
+Parce que ce serait trois mille appels système par capture, pour retrouver la même table
+dans l'immense majorité des cas — et que le fil de capture doit rester assez rapide pour ne
+pas perdre de paquets. Le compromis retenu (un instantané toutes les cinq secondes) est
+peut-être trop lent : c'est précisément ce qu'il reste à mesurer.
+
+## 6. Ce qu'il reste à faire pour conclure
+
+Mesurer le délai réel entre l'ouverture d'une connexion et sa disparition de la table, puis
+choisir : raccourcir la validité du cache, ou enrichir à l'ouverture d'une conversation
+plutôt qu'à chaque paquet — les flux étant suivis par l'analyseur, une connexion longue y
+est connue au moment où elle s'établit.

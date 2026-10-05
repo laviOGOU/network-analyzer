@@ -75,7 +75,21 @@
     return date.toLocaleTimeString("fr-FR", { hour12: false });
   }
 
+  /**
+   * Le programme qui tient le port local, quand il a pu être identifié.
+   *
+   * Il est mis **en tête** : c'est l'information qui répond le plus directement à « que fait
+   * cette machine ? ». Quand il manque — Windows ne donne pas le propriétaire d'un tiers des
+   * connexions sans droits administrateur — la ligne reste exacte, simplement moins
+   * parlante. Rien n'est inventé pour combler le vide.
+   */
   function detailLisible(paquet) {
+    const programme = (paquet.details || {}).processus_local;
+    const suite = detailSansProgramme(paquet);
+    return programme ? `${programme} · ${suite}` : suite;
+  }
+
+  function detailSansProgramme(paquet) {
     const detail = paquet.details || {};
 
     // Le nom du serveur visé, lu en clair dans le ClientHello TLS. C'est ce qui répond à

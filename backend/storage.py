@@ -391,7 +391,7 @@ def details_reduits(details: dict[str, Any]) -> dict[str, Any]:
     # personne ne saurait expliquer. C'est l'erreur qui a déjà coûté les noms de domaine.
     # `seq`, `ack`, `fenetre` et `charge_utile` sont en tete : ce sont eux qui portent les
     # analyses de l'Expert Info, et ils doivent survivre meme si la limite est atteinte.
-    ordre = ("seq", "ack", "fenetre", "charge_utile",
+    ordre = ("seq", "ack", "fenetre", "charge_utile", "processus_local", "processus_pid",
              "dns_question", "dns_reponse_nom", "dns_adresse", "dns_type", "dns_reponse",
              "tls_sni", "tls_version", "http_methode", "http_hote", "http_code",
              "icmp_lisible", "type_icmp", "operation_arp", "tronque", "type_ethernet",
