@@ -493,7 +493,7 @@ from backend.explain import explications     # toutes les explications applicabl
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**313 tests**, dont :
+**358 tests**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole
