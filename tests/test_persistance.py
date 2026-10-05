@@ -266,6 +266,75 @@ def test_les_filtres_de_lecture_fonctionnent(stockage):
     assert len(stockage.paquets(limite=10, recherche="example.com")) == 2
 
 
+def test_un_filtre_hostile_ne_touche_pas_la_base(stockage):
+    """La question de l'injection, posée à une vraie base au lieu d'être supposée.
+
+    Les critères sont des données : les valeurs deviennent des paramètres liés, jamais du
+    SQL. Le test le vérifie de la seule façon qui compte — en exécutant la tentative contre
+    PostgreSQL, et en constatant que la base est intacte et la réponse vide.
+    """
+    from backend import filtres
+
+    stockage.enregistrer_lot("s", "poste", [paquet()])
+    avant = stockage.statistiques()["paquets_total"]
+
+    tentatives = [
+        "texte:\"'; DROP TABLE analyzer.packets; --\"",
+        "texte:\"tcp' OR 1=1 --\"",
+        "ip:\"1.1.1.1' UNION SELECT * FROM analyzer.alerts --\"",
+        "proto:\"tcp'; DELETE FROM analyzer.flows; --\"",
+        "texte:\"%' OR '1'='1\"",
+    ]
+
+    refusees = 0
+    for tentative in tentatives:
+        try:
+            criteres = filtres.analyser(tentative)
+        except filtres.ErreurFiltre:
+            # Premier niveau : le parseur a refusé la valeur. Une adresse qui contient
+            # « UNION SELECT » n'est pas une adresse, et elle est rejetée comme telle.
+            refusees += 1
+            continue
+        # Second niveau : le critère est passé, mais la valeur devient un paramètre lié.
+        # La requête s'exécute, ne trouve rien, et ne modifie rien.
+        resultats = stockage.paquets(limite=10, filtre=criteres)
+        assert resultats == [], f"« {tentative} » a ramené des lignes"
+
+    # Les deux niveaux de défense doivent jouer : au moins une tentative bloquée par la
+    # validation, et aucune n'atteint la base sous forme de SQL.
+    assert refusees >= 1, "aucune tentative n'a été refusée par la validation"
+
+    # Les tables sont intactes : la base répond toujours, et les données sont là.
+    assert stockage.statistiques()["paquets_total"] == avant
+    assert len(stockage.paquets(limite=10)) == 1
+    assert stockage.session("s") is not None
+
+
+def test_le_filtre_de_la_base_donne_les_memes_lignes_qu_en_memoire(stockage):
+    """Le même filtre, appliqué par SQL et par Python, doit donner le même résultat.
+
+    Les deux chemins sont écrits séparément — une comparaison SQL d'un côté, une fonction
+    Python de l'autre. Rien ne garantit qu'ils restent d'accord, sinon ce test : sans lui,
+    une installation en mémoire et une installation PostgreSQL afficheraient des listes
+    différentes pour le même filtre, et personne ne saurait laquelle croire.
+    """
+    from backend import filtres
+    from backend.storage import Stockage
+
+    paquets = [paquet(port=443), paquet(port=80), paquet(port=443, source="10.0.0.9")]
+    stockage.enregistrer_lot("s", "poste", paquets)
+
+    memoire = Stockage(taille_max=100)
+    memoire.enregistrer_lot("s", "poste", paquets)
+
+    for expression in ("proto:tcp", "port:443", "ip:10.0.0.9", "taille:>10"):
+        criteres = filtres.analyser(expression)
+        par_sql = stockage.paquets(limite=10, filtre=criteres)
+        par_python = memoire.paquets(limite=10, filtre=criteres)
+        assert len(par_sql) == len(par_python), \
+            f"« {expression} » : {len(par_sql)} lignes en base, {len(par_python)} en mémoire"
+
+
 def test_le_stockage_se_vide(stockage):
     stockage.enregistrer_lot("s", "poste", [paquet()])
     stockage.enregistrer_communications("s", [communication("s")])

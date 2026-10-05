@@ -56,6 +56,71 @@
   autorisation écrite.
 </div>
 
+{# Barre de filtre d'affichage. Elle agit sur les trois listes à la fois — paquets,
+   communications, détections — parce qu'un filtre qui ne s'appliquerait qu'à une partie
+   de la page donnerait deux réponses différentes à la même question. #}
+<section class="barre-filtre" aria-labelledby="titre-filtre">
+  <h2 id="titre-filtre" class="sr-only">Filtre d'affichage</h2>
+  <div class="barre-filtre__ligne">
+    <label class="sr-only" for="champ-filtre">Expression de filtre</label>
+    <input type="search" id="champ-filtre" class="champ-filtre" autocomplete="off"
+           spellcheck="false"
+           placeholder="proto:tcp port:443 ip:192.168.1."
+           aria-describedby="aide-filtre filtre-erreur">
+    <button type="button" class="bouton bouton--fantome" id="effacer-filtre">Effacer</button>
+  </div>
+  <p class="aide" id="aide-filtre">
+    Un filtre s'écrit <code>champ:valeur</code> ; plusieurs critères se cumulent.
+    Champs disponibles : <code>proto</code> <code>port</code> <code>ip</code>
+    <code>etat</code> <code>niveau</code> <code>taille</code> <code>texte</code>
+    <code>session</code>. Exemple : <code>proto:tcp port:443</code>.
+    Pour une valeur contenant une espace : <code>etat:"échec probable"</code>.
+  </p>
+  <p class="filtre-erreur" id="filtre-erreur" role="alert" hidden></p>
+  <p class="filtre-resume" id="filtre-resume" hidden></p>
+</section>
+
+{# Légende des couleurs. Elle réutilise les classes des pastilles réellement affichées :
+   si une couleur change dans la feuille de style, la légende change avec elle. Une
+   légende recopiée à la main finirait par mentir. #}
+<details class="legende">
+  <summary>Légende des couleurs et des niveaux</summary>
+  <div class="legende__grille">
+    <div class="legende__bloc">
+      <h3>Protocoles</h3>
+      <ul class="legende__liste">
+        <li><span class="pastille-protocole" data-protocole="TCP">TCP</span> transport fiable, avec connexion</li>
+        <li><span class="pastille-protocole" data-protocole="UDP">UDP</span> transport rapide, sans connexion</li>
+        <li><span class="pastille-protocole" data-protocole="DNS">DNS</span> résolution de noms de domaine</li>
+        <li><span class="pastille-protocole" data-protocole="ICMP">ICMP</span> messages de contrôle du réseau</li>
+        <li><span class="pastille-protocole" data-protocole="inconnu">inconnu</span> protocole non identifié</li>
+      </ul>
+    </div>
+    <div class="legende__bloc">
+      <h3>État d'une communication</h3>
+      <ul class="legende__liste">
+        <li><span class="pastille-etat" data-etat="établie" data-certain="oui">établie</span> ouverture complète observée</li>
+        <li><span class="pastille-etat" data-etat="en cours" data-certain="oui">en cours</span> des données circulent</li>
+        <li><span class="pastille-etat" data-etat="fermée" data-certain="oui">fermée</span> conversation terminée</li>
+        <li><span class="pastille-etat" data-etat="tentative" data-certain="non">tentative</span> <strong>déduit</strong> : le point d'interrogation signale une observation incomplète</li>
+        <li><span class="pastille-etat" data-etat="échec probable" data-certain="oui">échec probable</span> aucune réponse à la demande</li>
+      </ul>
+      <p class="legende__note">
+        Un état en <strong>pointillés</strong> est une déduction, pas un fait : la capture
+        n'a pas vu le début de la conversation.
+      </p>
+    </div>
+    <div class="legende__bloc">
+      <h3>Niveaux d'une détection</h3>
+      <ul class="legende__liste">
+        <li><span class="etiquette-niveau" data-niveau="observation">observation</span> un fait mesuré, dont on ne conclut rien</li>
+        <li><span class="etiquette-niveau" data-niveau="hypothèse">hypothèse</span> une forme qui ressemble à quelque chose, et que des usages ordinaires produisent aussi</li>
+        <li><span class="etiquette-niveau" data-niveau="alerte">alerte</span> plusieurs indices de familles différentes convergent sur une même machine</li>
+      </ul>
+    </div>
+  </div>
+</details>
+
 <main>
   <section aria-labelledby="titre-traffic">
     <h2 id="titre-traffic" class="titre-section">Traffic</h2>

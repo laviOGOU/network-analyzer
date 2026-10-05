@@ -51,23 +51,11 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-#: Domaine fictif, utilisé uniquement pour dériver un identifiant stable à partir d'un
-#: libellé de session. `uuid5` est déterministe : le même libellé donne toujours le même
-#: identifiant, sur n'importe quelle machine — ce qui rend les tests reproductibles.
-ESPACE_SESSIONS = uuid.UUID("6f9619ff-8b86-d011-b42d-00c04fc964ff")
-
-
-def identifiant_session(libelle: str) -> str:
-    """Convertit un libellé de session en identifiant stable.
-
-    Un agent envoie déjà un identifiant unique ; un outil de vérification envoie souvent
-    un nom lisible (« capture-du-matin »). Les deux doivent fonctionner, et le même
-    libellé doit désigner la même session d'une exécution à l'autre.
-    """
-    try:
-        return str(uuid.UUID(libelle))
-    except (ValueError, AttributeError, TypeError):
-        return str(uuid.uuid5(ESPACE_SESSIONS, str(libelle)))
+# La conversion vit dans son propre module : la traduction des filtres en a besoin, et
+# elle serait sinon devenue un import circulaire. Elle est ré-exportée ici pour que les
+# appelants existants n'aient pas à changer.
+from backend import filtres_sql
+from backend.identifiants import identifiant_session  # noqa: E402  (ré-export)
 
 
 def _date(valeur: str | None) -> str | None:
@@ -183,7 +171,19 @@ class StockagePostgres:
                 self._assurer_session(curseur, identifiant, agent)
 
                 lignes = []
+                ecartes = 0
                 for paquet in paquets:
+                    # Une adresse identique des deux côtés ne décrit aucun échange — c'est
+                    # le signe d'une capture abîmée ou d'une donnée forgée. Le schéma
+                    # l'interdit par une contrainte, et il a raison. Mais laisser la
+                    # contrainte faire échouer l'insertion ferait perdre **tout le lot**
+                    # pour une ligne : on écarte donc la ligne avant l'insertion, et le
+                    # schéma reste la dernière ligne de défense plutôt que la première.
+                    source = _adresse(paquet.get("ip_source"))
+                    destination = _adresse(paquet.get("ip_destination"))
+                    if source and destination and source == destination:
+                        ecartes += 1
+                        continue
                     details = paquet.get("details") or {}
                     lignes.append((
                         identifiant,
@@ -225,7 +225,13 @@ class StockagePostgres:
                      WHERE id = %s
                 """, (len(lignes), identifiant))
             connexion.commit()
-        return len(paquets)
+
+        if ecartes:
+            logger.warning("Lot %s : %d paquet(s) écarté(s) — adresse source et "
+                           "destination identiques", session[:8], ecartes)
+        # On rend le nombre réellement écrit : l'agent compare ce qu'il a envoyé à ce qui
+        # a été conservé, et c'est ainsi qu'une perte se voit au lieu de se subir.
+        return len(lignes)
 
     def enregistrer_communications(self, session: str,
                                    communications: list[dict[str, Any]]) -> int:
@@ -365,7 +371,8 @@ class StockagePostgres:
 
     # ------------------------------------------------------------------ lecture
     def paquets(self, limite: int = 100, protocole: str | None = None,
-                session: str | None = None, recherche: str | None = None) -> list[dict]:
+                session: str | None = None, recherche: str | None = None,
+                filtre: list | None = None) -> list[dict]:
         conditions, valeurs = [], []
         if protocole:
             conditions.append("protocole = %s")
@@ -381,6 +388,15 @@ class StockagePostgres:
                 OR COALESCE(details->>'domaine', '') ILIKE %s)""")
             motif = f"%{recherche}%"
             valeurs.extend([motif, motif, recherche, recherche, motif])
+
+        # Le filtre d'affichage arrive ici sous forme de critères déjà validés. Ses
+        # conditions sont ajoutées aux précédentes, dans le même ordre que ses paramètres :
+        # c'est cette correspondance qui garantit qu'aucune valeur ne se perd.
+        if filtre:
+            fragment, parametres = filtres_sql.conditions(filtre, "paquets")
+            if fragment:
+                conditions.append(fragment)
+                valeurs.extend(parametres)
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         valeurs.append(min(limite, 1000))
@@ -424,7 +440,7 @@ class StockagePostgres:
 
     def communications(self, limite: int = 100, etat: str | None = None,
                        protocole: str | None = None, session: str | None = None,
-                       recherche: str | None = None) -> list[dict]:
+                       recherche: str | None = None, filtre: list | None = None) -> list[dict]:
         conditions, valeurs = [], []
         if session:
             conditions.append("session_id = %s")
@@ -442,6 +458,12 @@ class StockagePostgres:
                 OR etat ILIKE %s)""")
             motif = f"%{recherche}%"
             valeurs.extend([motif, motif, recherche, recherche, motif])
+
+        if filtre:
+            fragment, parametres = filtres_sql.conditions(filtre, "communications")
+            if fragment:
+                conditions.append(fragment)
+                valeurs.extend(parametres)
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         valeurs.append(min(limite, 2000))
@@ -461,7 +483,7 @@ class StockagePostgres:
         return resultats
 
     def detections(self, limite: int = 200, niveau: str | None = None,
-                   session: str | None = None) -> list[dict]:
+                   session: str | None = None, filtre: list | None = None) -> list[dict]:
         conditions, valeurs = [], []
         if session:
             conditions.append("session_id = %s")
@@ -470,6 +492,12 @@ class StockagePostgres:
             conditions.append("niveau = %s")
             valeurs.append({"observation": "observation", "hypothèse": "hypothese",
                             "hypothese": "hypothese", "alerte": "alerte"}.get(niveau, niveau))
+
+        if filtre:
+            fragment, parametres = filtres_sql.conditions(filtre, "detections")
+            if fragment:
+                conditions.append(fragment)
+                valeurs.extend(parametres)
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         valeurs.append(min(limite, 500))

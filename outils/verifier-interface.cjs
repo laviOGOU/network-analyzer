@@ -51,8 +51,14 @@ function verifier(intitule, condition, precision = "") {
     if (message.type() === "error") erreurs.push(`console : ${message.text()}`);
   });
 
-  await page.goto(adresse, { waitUntil: "networkidle" });
-  await page.waitForTimeout(1500);
+  // `networkidle` ne se stabilise jamais : la page interroge le serveur en continu, ce
+  // qui est précisément son rôle. On attend le contenu, pas le silence du réseau.
+  await page.goto(adresse, { waitUntil: "domcontentloaded" });
+  // On attend la première ligne du tableau, pas un délai deviné : la page fait sa
+  // première requête aussitôt chargée, mais le temps qu'elle revienne dépend de la
+  // machine et de la taille de la base.
+  await page.waitForSelector("#corps-communications tr", { timeout: 20000 }).catch(() => {});
+  await page.waitForTimeout(400);
 
   const lignes = await page.locator("#corps-communications tr").count();
   verifier("la table des communications se remplit", lignes > 0, `${lignes} ligne(s)`);
@@ -158,8 +164,10 @@ function verifier(intitule, condition, precision = "") {
         headers: { "Content-Type": "application/json", "X-Agent-Token": jeton },
         body: JSON.stringify({
           session: "verification-rendu", agent: "verificateur",
+          // Deux adresses distinctes : le schéma interdit un paquet dont la source et la
+          // destination sont identiques, et il a raison — ce n'est pas un échange.
           paquets: [{ horodatage: new Date().toISOString(), protocole: "TCP",
-                      ip_source: "127.0.0.1", ip_destination: "127.0.0.1",
+                      ip_source: "127.0.0.1", ip_destination: "127.0.0.2",
                       taille: 60, ttl: 64 }],
           detections: niveaux.map((niveau, i) => ({
             regle: `verification_niveau_${i}`, famille: "verification", niveau,
@@ -192,7 +200,82 @@ function verifier(intitule, condition, precision = "") {
     console.log("  (niveau de rendu des trois niveaux non vérifié : ANALYZER_JETON absent)");
   }
 
-  verifier("aucune erreur JavaScript", erreurs.length === 0, erreurs.slice(0, 3).join(" | "));
+  /* ------------------------------------------- Lot A : filtre et légende des couleurs */
+  const champFiltre = page.locator("#champ-filtre");
+  verifier("la barre de filtre est présente", await champFiltre.count() === 1);
+
+  await page.locator("#titre-paquets").scrollIntoViewIfNeeded();
+  await page.waitForTimeout(400);
+  const paquetsAvant = await page.locator("#corps-paquets tr").count();
+
+  await champFiltre.fill("proto:tcp");
+  // Attente conditionnelle plutôt qu'un délai fixe : on attend que le filtre soit
+  // réellement appliqué. Un délai fixe produit des échecs qui dépendent de la charge de
+  // la machine, et qu'on ne sait plus interpréter six mois plus tard.
+  await page.waitForFunction(() => window.filtreAffichage === "proto:tcp", { timeout: 10000 });
+  await page.waitForFunction(() => {
+    const corps = document.getElementById("corps-paquets");
+    if (!corps || !corps.children.length) return false;
+    return [...corps.querySelectorAll(".pastille-protocole")]
+      .every((e) => e.textContent.trim() === "TCP");
+  }, { timeout: 10000 });
+  const paquetsTcp = await page.locator("#corps-paquets tr").count();
+  const protocoles = await page.locator("#corps-paquets .pastille-protocole")
+    .allTextContents();
+  // Le nombre de lignes ne baisse pas forcément : la limite s'applique après le filtre,
+  // donc la liste se remplit avec les paquets TCP suivants. Ce qui compte, c'est que
+  // **tout ce qui est affiché** réponde au filtre.
+  verifier("le filtre ne laisse que le protocole demandé",
+    protocoles.length > 0 && protocoles.every((p) => p.trim() === "TCP"),
+    `${paquetsAvant} → ${paquetsTcp} lignes · protocoles : `
+    + [...new Set(protocoles.map((p) => p.trim()))].join(", "));
+  verifier("le filtre interprété est réaffiché",
+    (await page.locator("#filtre-resume").textContent() || "").includes("proto:tcp"));
+  await page.screenshot({ path: chemin.join(dossier, "05-filtre.png") });
+
+  // Un filtre incompris : le message s'affiche, ET les listes gardent leur contenu.
+  // C'est la propriété qui compte : une faute de frappe ne doit pas vider le tableau.
+  await champFiltre.fill("couleur:rouge");
+  await page.waitForFunction(
+    () => !document.getElementById("filtre-erreur").hidden, { timeout: 10000 });
+  const messageErreur = await page.locator("#filtre-erreur").textContent() || "";
+  verifier("un filtre incompris affiche un message", /couleur/.test(messageErreur));
+  verifier("le message propose les champs valides", /proto/.test(messageErreur));
+  const paquetsApresErreur = await page.locator("#corps-paquets tr").count();
+  verifier("les listes ne se vident pas sur une faute de frappe",
+    paquetsApresErreur > 0, `${paquetsApresErreur} ligne(s) conservée(s)`);
+  await page.screenshot({ path: chemin.join(dossier, "06-filtre-refuse.png") });
+
+  // Échap : on revient à la vue complète.
+  await champFiltre.press("Escape");
+  await page.waitForFunction(
+    () => document.getElementById("filtre-erreur").hidden, { timeout: 10000 });
+  verifier("Échap efface le filtre",
+    (await champFiltre.inputValue()) === ""
+    && await page.locator("#filtre-erreur").isHidden());
+
+  // La légende doit employer les mêmes couleurs que les pastilles réellement affichées.
+  await page.locator(".legende summary").click();
+  await page.waitForTimeout(300);
+  const couleursLegende = await page.locator(
+    ".legende .pastille-protocole").evaluateAll(
+      (elements) => elements.map((e) => getComputedStyle(e).color));
+  const couleursListe = await page.locator("#corps-paquets .pastille-protocole")
+    .evaluateAll((elements) => [...new Set(elements.map((e) => getComputedStyle(e).color))]);
+  const communes = couleursListe.filter((c) => couleursLegende.includes(c));
+  verifier("la légende emploie les couleurs réellement affichées", communes.length > 0,
+    `${communes.length} couleur(s) commune(s)`);
+  verifier("la légende explique aussi les niveaux de détection",
+    await page.locator(".legende .etiquette-niveau").count() >= 3);
+  await page.locator(".legende").screenshot(
+    { path: chemin.join(dossier, "07-legende.png") });
+
+  // Le 400 du filtre volontairement invalide est attendu : c'est le serveur qui refuse,
+  // pas le script qui casse. Le compter comme une erreur ferait échouer le contrôle pour
+  // une raison qui n'en est pas une.
+  const erreursReelles = erreurs.filter((e) => !/400 \(Bad Request\)/.test(e));
+  verifier("aucune erreur JavaScript", erreursReelles.length === 0,
+    erreursReelles.slice(0, 3).join(" | "));
 
   const reussis = resultats.filter((r) => r.ok).length;
   console.log(`\n  ${reussis}/${resultats.length} vérifications réussies`);

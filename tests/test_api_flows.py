@@ -253,6 +253,57 @@ def test_aucune_purge_sans_persistance():
     assert lancer_purge_periodique() is None
 
 
+def test_le_filtre_d_affichage_trie_les_paquets(client):
+    """Le filtre traverse toute la chaîne : expression, validation, application."""
+    client.post("/api/v1/ingest", headers={"X-Agent-Token": JETON},
+                json={"session": "s", "agent": "poste",
+                      "paquets": [paquet(), {**paquet(), "protocole": "UDP",
+                                             "port_destination": 53}]})
+
+    tous = client.get("/api/v1/packets").json()
+    tcp = client.get("/api/v1/packets?filtre=proto:tcp").json()
+    udp = client.get("/api/v1/packets?filtre=proto:udp").json()
+
+    assert len(tous["paquets"]) == 2
+    assert len(tcp["paquets"]) == 1
+    assert tcp["paquets"][0]["protocole"] == "TCP"
+    assert len(udp["paquets"]) == 1
+
+
+def test_un_filtre_incompris_est_refuse_avec_la_liste_des_champs(client):
+    """400, et non une liste vide : un filtre ignoré ferait croire à un résultat.
+
+    C'est la différence entre « il n'y a rien » et « je n'ai pas compris ». Confondre les
+    deux ferait conclure à un réseau calme alors que le filtre ne s'applique pas.
+    """
+    reponse = client.get("/api/v1/packets?filtre=couleur:rouge")
+    assert reponse.status_code == 400
+    detail = reponse.json()["detail"]
+    assert "couleur" in detail
+    assert "proto" in detail and "port" in detail      # les champs valides sont proposés
+
+
+def test_le_filtre_s_applique_aussi_aux_communications(client):
+    client.post("/api/v1/ingest", headers={"X-Agent-Token": JETON},
+                json={"session": "s", "agent": "poste", "paquets": [paquet()],
+                      "communications": [communication(), communication(etat="fermée",
+                                                                        cle="UDP|x|y")]})
+    toutes = client.get("/api/v1/flows").json()
+    filtrees = client.get("/api/v1/flows?filtre=etat:fermée").json()
+    assert toutes["affichees"] == 2
+    assert filtrees["affichees"] == 1
+
+
+def test_le_filtre_s_applique_aussi_aux_detections(client):
+    client.post("/api/v1/ingest", headers={"X-Agent-Token": JETON},
+                json={"session": "s", "agent": "poste", "paquets": [paquet()],
+                      "detections": [detection(niveau="observation", regle="dns_volume"),
+                                     detection(niveau="alerte", regle="faisceau_indices")]})
+    alertes = client.get("/api/v1/alerts?filtre=niveau:alerte").json()
+    assert alertes["affichees"] == 1
+    assert alertes["detections"][0]["niveau"] == "alerte"
+
+
 def test_le_filtre_du_journal_est_precis():
     """Le filtre doit taire une erreur de Windows sans masquer les vraies pannes.
 

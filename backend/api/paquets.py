@@ -29,6 +29,8 @@ try:
 except ImportError:                                  # pragma: no cover
     SEUILS: dict[str, int] = {}
 
+from backend import filtres as mod_filtres
+from backend import filtres_sql as mod_filtres_sql
 from backend.dependances import obtenir_enrichissement, obtenir_stockage
 from backend.enrichment import Enrichissement
 from backend.explain import llm
@@ -38,6 +40,26 @@ from backend.storage import Stockage
 router = APIRouter(tags=["lecture"])
 
 
+def criteres_du_filtre(filtre: str | None, table: str) -> tuple[list, list[str]]:
+    """Traduit un filtre d'affichage pour une vue précise.
+
+    Rend les critères applicables, et la liste des champs écartés parce qu'ils ne
+    concernent pas cette vue. Un champ écarté est **annoncé**, jamais tu : l'interface le
+    réaffiche, et l'utilisateur sait ce qui n'a pas été filtré.
+
+    Une expression incomprise est refusée par un **400** — pas un 500, et surtout pas un
+    résultat vide. Le message énumère les champs valides, ce qui permet de corriger sans
+    consulter la documentation.
+    """
+    try:
+        criteres = mod_filtres.analyser(filtre)
+    except mod_filtres.ErreurFiltre as erreur:
+        raise HTTPException(status_code=400, detail=str(erreur)) from erreur
+
+    applicables, ignorees = mod_filtres_sql.separer(criteres, table)
+    return applicables, [critere.champ for critere in ignorees]
+
+
 @router.get("/packets", summary="Derniers paquets capturés")
 def lister_paquets(
     stockage: Annotated[Stockage, Depends(obtenir_stockage)],
@@ -45,18 +67,22 @@ def lister_paquets(
     protocole: Annotated[str | None, Query(max_length=32, description="Filtre : TCP, UDP, DNS…")] = None,
     session: Annotated[str | None, Query(max_length=64, description="Identifiant de session")] = None,
     recherche: Annotated[str | None, Query(max_length=64, description="Recherche libre (IP, domaine, port)")] = None,
+    filtre: Annotated[str | None, Query(max_length=300,
+        description="Filtre d'affichage : proto:tcp port:443 ip:192.168.1.")] = None,
 ) -> dict[str, Any]:
     """Rend les paquets les plus récents d'abord.
 
     Les bornes de `Query` ne sont pas décoratives : sans elles, `?limite=100000000`
     demanderait au serveur de préparer une réponse énorme, pour rien.
     """
+    criteres, ignores = criteres_du_filtre(filtre, "paquets")
     paquets = stockage.paquets(limite=limite, protocole=protocole,
-                               session=session, recherche=recherche)
+                               session=session, recherche=recherche, filtre=criteres)
     return {
         "paquets": paquets,
         "affiches": len(paquets),
         "statistiques": stockage.statistiques(),
+        "filtre_ignores": ignores,
     }
 
 
@@ -68,6 +94,8 @@ def lister_communications(
     protocole: Annotated[str | None, Query(max_length=32)] = None,
     session: Annotated[str | None, Query(max_length=64, description="Identifiant de session")] = None,
     recherche: Annotated[str | None, Query(max_length=64, description="IP, port, état")] = None,
+    filtre: Annotated[str | None, Query(max_length=300,
+        description="Filtre d'affichage : proto:tcp port:443 etat:établie")] = None,
 ) -> dict[str, Any]:
     """Communications regroupées, la plus récente d'abord.
 
@@ -75,8 +103,10 @@ def lister_communications(
     affiché, pas seulement stocké : une communication vue en cours de route ne peut pas
     être présentée avec la même assurance qu'une ouverture observée en entier.
     """
+    criteres, ignores = criteres_du_filtre(filtre, "communications")
     communications = stockage.communications(limite=limite, etat=etat, protocole=protocole,
-                                             session=session, recherche=recherche)
+                                             session=session, recherche=recherche,
+                                             filtre=criteres)
 
     # Une explication « de liste » accompagne chaque communication. Elle est volontairement
     # générale — elle répond à « de quel genre de communication s'agit-il ? » — et mise en
@@ -93,7 +123,10 @@ def lister_communications(
             bool(communication.get("etat_certain")),
         )
     return {"communications": communications, "affichees": len(communications),
-            "statistiques": stockage.statistiques()}
+            "statistiques": stockage.statistiques(),
+            # Les critères qui ne concernent pas cette vue. L'interface les réaffiche :
+            # un filtre partiellement appliqué doit se voir, pas se deviner.
+            "filtre_ignores": ignores}
 
 
 @router.get("/enrichment", summary="Contexte externe d'une adresse IP")
@@ -140,6 +173,8 @@ def lister_detections(
     niveau: Annotated[str | None, Query(pattern="^(observation|hypothèse|alerte)$",
                                         description="Filtre par niveau de certitude")] = None,
     session: Annotated[str | None, Query(max_length=64)] = None,
+    filtre: Annotated[str | None, Query(max_length=300,
+        description="Filtre d'affichage : niveau:hypothèse ip:192.168.1.")] = None,
 ) -> dict[str, Any]:
     """Rend les détections connues, la plus récente d'abord.
 
@@ -148,12 +183,15 @@ def lister_detections(
     « alerte ». Un niveau « alerte » n'est pas un incident confirmé — c'est un faisceau
     d'indices convergents, et le texte de chaque détection le dit.
     """
-    detections = stockage.detections(limite=limite, niveau=niveau, session=session)
+    criteres, ignores = criteres_du_filtre(filtre, "detections")
+    detections = stockage.detections(limite=limite, niveau=niveau, session=session,
+                                     filtre=criteres)
     return {
         "detections": detections,
         "affichees": len(detections),
         "par_niveau": stockage.statistiques().get("detections_par_niveau", {}),
         "seuils": SEUILS,
+        "filtre_ignores": ignores,
     }
 
 

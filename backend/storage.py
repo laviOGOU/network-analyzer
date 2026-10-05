@@ -26,6 +26,8 @@ import threading
 from collections import Counter, deque
 from typing import Any
 
+from backend import filtres
+
 #: Taille du dictionnaire de détails conservé tel quel. Au-delà, on le tronque : ce qui
 #: compte pour l'observateur, ce sont les faits saillants, pas l'exhaustivité.
 MAX_DETAILS_CONSERVES = 8
@@ -184,7 +186,8 @@ class Stockage:
             return len(detections)
 
     def detections(self, limite: int = 200, niveau: str | None = None,
-                   session: str | None = None) -> list[dict[str, Any]]:
+                   session: str | None = None,
+                   filtre: list | None = None) -> list[dict[str, Any]]:
         """Détections conservées, la plus récente d'abord."""
         with self._verrou:
             liste = list(self._detections.values())
@@ -193,6 +196,8 @@ class Stockage:
             liste = [d for d in liste if d.get("session") == session]
         if niveau:
             liste = [d for d in liste if d.get("niveau") == niveau]
+        if filtre:
+            liste = filtres.filtrer(filtre, liste)
         liste.sort(key=lambda d: (d.get("dernier") or "", d.get("debut") or ""), reverse=True)
         return liste[:limite]
 
@@ -222,7 +227,8 @@ class Stockage:
 
     # ------------------------------------------------------------------ lecture
     def paquets(self, limite: int = 100, protocole: str | None = None,
-                session: str | None = None, recherche: str | None = None) -> list[dict[str, Any]]:
+                  session: str | None = None, recherche: str | None = None,
+                  filtre: list | None = None) -> list[dict[str, Any]]:
         """Derniers paquets, du plus récent au plus ancien, filtrés si demandé."""
         with self._verrou:
             paquets = list(self._paquets)
@@ -241,6 +247,11 @@ class Stockage:
         if recherche:
             besoin = recherche.lower()
             paquets = [p for p in paquets if besoin in _texte_paquet(p)]
+        # Le filtre d'affichage s'applique **avant** la troncature : couper d'abord puis
+        # filtrer rendrait un nombre de lignes qui dépend de l'ordre d'arrivée, ce qui
+        # donnerait des résultats différents d'un rafraîchissement à l'autre.
+        if filtre:
+            paquets = filtres.filtrer(filtre, paquets)
 
         return list(reversed(paquets))[:max(0, limite)]
 
@@ -263,7 +274,8 @@ class Stockage:
 
     def communications(self, limite: int = 100, etat: str | None = None,
                        protocole: str | None = None, session: str | None = None,
-                       recherche: str | None = None) -> list[dict[str, Any]]:
+                       recherche: str | None = None,
+                       filtre: list | None = None) -> list[dict[str, Any]]:
         """Communications conservées, la plus récente d'abord."""
         with self._verrou:
             liste = list(self._communications.values())
@@ -281,6 +293,9 @@ class Stockage:
                      if besoin in f"{c.get('ip_a','')} {c.get('ip_b','')} "
                                   f"{c.get('port_a','')} {c.get('port_b','')} "
                                   f"{c.get('etat','')}".lower()]
+
+        if filtre:
+            liste = filtres.filtrer(filtre, liste)
 
         liste.sort(key=lambda c: c.get("dernier_paquet") or "", reverse=True)
         return liste[:max(0, limite)]

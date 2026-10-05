@@ -1,4 +1,115 @@
 /* =============================================================================
+   Barre de filtre et légende
+   -----------------------------------------------------------------------------
+   La légende réutilise les classes des pastilles réellement affichées : elle ne peut
+   pas se désynchroniser de ce qu'elle explique. Une légende recopiée à la main devient
+   fausse au premier changement de couleur, et personne ne s'en aperçoit.
+   ============================================================================= */
+
+.barre-filtre {
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: var(--rayon);
+  padding: .9rem 1.1rem;
+  margin-bottom: 1.25rem;
+}
+
+.barre-filtre__ligne {
+  display: flex; flex-wrap: wrap; gap: .6rem;
+  align-items: center;
+}
+
+.champ-filtre {
+  flex: 1 1 18rem;
+  min-width: 0;                    /* sans quoi le champ impose sa largeur au conteneur */
+  padding: .55rem .8rem;
+  font-family: var(--mono);
+  font-size: .92rem;
+  color: var(--texte);
+  background: var(--surface-2);
+  border: 1px solid var(--bord);
+  border-radius: var(--rayon-petit);
+}
+
+.champ-filtre:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Le filtre refusé : bordure rouge ET message écrit. La couleur seule ne suffirait pas
+   à signaler une erreur à qui la distingue mal. */
+.champ-filtre[data-invalide="oui"] { border-color: var(--danger); }
+
+.filtre-erreur {
+  margin: .6rem 0 0;
+  padding: .6rem .8rem;
+  border-left: 3px solid var(--danger);
+  background: var(--surface-2);
+  color: var(--texte);
+  font-size: .84rem;
+  white-space: pre-wrap;            /* le message du serveur est déjà mis en forme */
+}
+
+.filtre-resume {
+  margin: .5rem 0 0;
+  color: var(--texte-doux);
+  font-size: .82rem;
+}
+
+.filtre-resume code { font-family: var(--mono); color: var(--texte); }
+
+.legende {
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: var(--rayon);
+  padding: .7rem 1.1rem;
+  margin-bottom: 1.25rem;
+}
+
+.legende summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: .92rem;
+  padding: .2rem 0;
+}
+
+.legende summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.legende__grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 1.1rem;
+  margin-top: .9rem;
+}
+
+.legende__bloc h3 {
+  margin: 0 0 .5rem;
+  font-size: .82rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--texte-faible);
+}
+
+.legende__liste { list-style: none; margin: 0; padding: 0; }
+.legende__liste li {
+  display: flex; flex-wrap: wrap; gap: .5rem;
+  align-items: baseline;
+  margin-bottom: .45rem;
+  font-size: .84rem;
+  color: var(--texte-doux);
+}
+
+.legende__note {
+  margin: .6rem 0 0;
+  font-size: .8rem;
+  color: var(--texte-faible);
+}
+
+@media (max-width: 640px) {
+  .champ-filtre { flex: 1 1 100%; }
+}
+
+/* =============================================================================
    Détections — trois niveaux, jamais signalés par la couleur seule
    -----------------------------------------------------------------------------
    Chaque carte porte le nom de son niveau écrit en toutes lettres, en plus de sa

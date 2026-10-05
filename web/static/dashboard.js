@@ -225,6 +225,7 @@
       const parametres = new URLSearchParams({ limite: String(LIMITE) });
       if (el.filtreProtocole.value) parametres.set("protocole", el.filtreProtocole.value);
       if (el.filtreRecherche.value.trim()) parametres.set("recherche", el.filtreRecherche.value.trim());
+      if (window.filtreAffichage) parametres.set("filtre", window.filtreAffichage);
 
       const reponse = await fetch(`/api/v1/packets?${parametres}`, {
         headers: { Accept: "application/json" },
@@ -232,6 +233,7 @@
       if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
 
       const donnees = await reponse.json();
+      signalerCriteresEcartes(donnees.filtre_ignores);
       const stats = donnees.statistiques || {};
 
       majCartes(stats);
@@ -289,6 +291,7 @@
   // Reprise immédiate au retour sur l'onglet : sans cela, l'affichage resterait figé
   // jusqu'au prochain battement.
   document.addEventListener("visibilitychange", () => { if (!document.hidden) charger(); });
+  document.addEventListener("filtre-change", charger);
 
   /* ----------------------------------------------------------------- thème */
   const CLE_THEME = "analyzer-theme";
@@ -446,10 +449,12 @@
     try {
       const parametres = new URLSearchParams({ limite: "150" });
       if (zone.filtre.value) parametres.set("etat", zone.filtre.value);
+      if (window.filtreAffichage) parametres.set("filtre", window.filtreAffichage);
       const reponse = await fetch(`/api/v1/flows?${parametres}`,
                                   { headers: { Accept: "application/json" } });
       if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
       const donnees = await reponse.json();
+      signalerCriteresEcartes(donnees.filtre_ignores);
       rendre(donnees.communications || []);
     } catch (erreur) {
       // On ne vide pas le tableau : l'indicateur principal signale déjà la panne.
@@ -598,6 +603,7 @@
   });
 
   zone.filtre.addEventListener("change", charger);
+  document.addEventListener("filtre-change", charger);
   charger();
   setInterval(charger, PERIODE_COMMUNICATIONS);
 })();
@@ -684,10 +690,12 @@
     try {
       const parametres = new URLSearchParams({ limite: "50" });
       if (zone.filtre.value) parametres.set("niveau", zone.filtre.value);
+      if (window.filtreAffichage) parametres.set("filtre", window.filtreAffichage);
       const reponse = await fetch(`/api/v1/alerts?${parametres}`,
                                   { headers: { Accept: "application/json" } });
       if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
       const donnees = await reponse.json();
+      signalerCriteresEcartes(donnees.filtre_ignores);
       rendre(donnees.detections || []);
     } catch (erreur) {
       // On ne vide pas la liste : l'indicateur principal signale déjà la panne, et des
@@ -699,6 +707,166 @@
   }
 
   zone.filtre.addEventListener("change", charger);
+  document.addEventListener("filtre-change", charger);
   charger();
   setInterval(charger, PERIODE_DETECTIONS);
+})();
+
+
+/**
+ * Annonce à la barre de filtre les critères qu'une vue n'a pas pu appliquer.
+ *
+ * Chaque liste appelle cette fonction après sa requête. Les critères écartés s'additionnent
+ * : « proto » n'a pas de sens pour les détections, « niveau » n'en a pas pour les paquets,
+ * et l'utilisateur doit voir les deux plutôt que le dernier reçu.
+ *
+ * Une variable globale et un événement : c'est ce qui évite que les quatre modules se
+ * connaissent les uns les autres. Chacun signale ce qu'il sait, la barre rassemble.
+ */
+function signalerCriteresEcartes(champs) {
+  if (!Array.isArray(champs)) return;
+  // Création paresseuse : les modules de liste démarrent avant que cette ligne ne soit
+  // atteinte, et une requête peut revenir très vite. Initialiser ici plutôt qu'au
+  // chargement évite de dépendre de l'ordre d'exécution du fichier.
+  window.criteresEcartes = window.criteresEcartes || new Set();
+  let change = false;
+  for (const champ of champs) {
+    if (!window.criteresEcartes.has(champ)) { window.criteresEcartes.add(champ); change = true; }
+  }
+  if (change) document.dispatchEvent(new CustomEvent("filtre-ecarte"));
+}
+
+/* =============================================================================
+   Barre de filtre d'affichage
+   -----------------------------------------------------------------------------
+   Un seul filtre, trois listes. Le choix d'un état partagé plutôt que d'un filtre par
+   liste est délibéré : un filtre qui ne s'appliquerait qu'à une partie de la page
+   donnerait deux réponses différentes à la même question, et l'utilisateur ne saurait
+   pas laquelle croire.
+
+   La validation se fait **avant** d'engager les listes : une requête d'essai sur un seul
+   paquet dit si l'expression est comprise. Si elle ne l'est pas, le message du serveur
+   est affiché tel quel et les listes ne bougent pas — elles continuent de montrer les
+   dernières données valides, plutôt que de se vider sur une faute de frappe.
+   ============================================================================= */
+(function () {
+  "use strict";
+
+  const DELAI_FRAPPE = 400;        // ms : on ne valide pas à chaque caractère
+
+  const zone = {
+    champ: document.getElementById("champ-filtre"),
+    effacer: document.getElementById("effacer-filtre"),
+    erreur: document.getElementById("filtre-erreur"),
+    resume: document.getElementById("filtre-resume"),
+  };
+  if (!zone.champ) return;
+
+  //: État partagé, lu par les trois modules de liste. Une variable globale assumée : la
+  //: alternative serait de faire circuler le filtre de module en module, ce qui les
+  //: rendrait dépendants les uns des autres.
+  window.filtreAffichage = "";
+
+  let minuteur = null;
+
+  function afficherErreur(message) {
+    zone.erreur.textContent = message || "";
+    zone.erreur.hidden = !message;
+    zone.champ.dataset.invalide = message ? "oui" : "non";
+    zone.champ.setAttribute("aria-invalid", message ? "true" : "false");
+  }
+
+  function afficherResume(expression) {
+    if (!expression) {
+      zone.resume.hidden = true;
+      zone.resume.textContent = "";
+      return;
+    }
+    // On réaffiche ce que le serveur a compris : une valeur mal orthographiée se voit.
+    zone.resume.hidden = false;
+    zone.resume.textContent = "";
+    const avant = document.createTextNode("Filtre appliqué : ");
+    const code = document.createElement("code");
+    code.textContent = expression;
+    zone.resume.appendChild(avant);
+    zone.resume.appendChild(code);
+  }
+
+  /** Réaffiche les critères sans objet, et vide la liste quand le filtre change. */
+  function afficherCriteresEcartes() {
+    const champs = [...(window.criteresEcartes || [])];
+    if (!champs.length) {
+      zone.resume.title = "";
+      return;
+    }
+    zone.resume.title = "Sans objet dans cette vue : " + champs.join(", ");
+  }
+
+  async function validerEtAppliquer() {
+    const expression = zone.champ.value.trim();
+    // Nouveau filtre : les critères écartés de l'ancien ne veulent plus rien dire.
+    if (window.criteresEcartes) window.criteresEcartes.clear();
+
+    if (!expression) {
+      afficherErreur("");
+      afficherResume("");
+      window.filtreAffichage = "";
+      document.dispatchEvent(new CustomEvent("filtre-change"));
+      return;
+    }
+
+    try {
+      // Requête d'essai : un seul enregistrement suffit à savoir si l'expression est
+      // comprise. Elle ne sert pas à afficher quoi que ce soit.
+      const reponse = await fetch(
+        `/api/v1/packets?limite=1&filtre=${encodeURIComponent(expression)}`,
+        { headers: { Accept: "application/json" } });
+
+      if (reponse.status === 400) {
+        const donnees = await reponse.json();
+        afficherErreur(donnees.detail || "Filtre incompris.");
+        afficherResume("");
+        window.filtreAffichage = "";
+        return;
+      }
+      if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
+
+      afficherErreur("");
+      afficherResume(expression);
+      window.filtreAffichage = expression;
+      document.dispatchEvent(new CustomEvent("filtre-change"));
+    } catch (erreur) {
+      // Une panne réseau n'est pas un filtre invalide : on le dit autrement, et on ne
+      // touche pas au filtre en cours.
+      afficherErreur(`Impossible de vérifier le filtre : ${erreur.message}`);
+    }
+  }
+
+  function planifier() {
+    if (minuteur) clearTimeout(minuteur);
+    minuteur = setTimeout(validerEtAppliquer, DELAI_FRAPPE);
+  }
+
+  document.addEventListener("filtre-ecarte", afficherCriteresEcartes);
+  zone.champ.addEventListener("input", planifier);
+  // La touche Entrée applique tout de suite, sans attendre le délai.
+  zone.champ.addEventListener("keydown", (evenement) => {
+    if (evenement.key === "Enter") {
+      evenement.preventDefault();
+      if (minuteur) clearTimeout(minuteur);
+      validerEtAppliquer();
+    }
+    if (evenement.key === "Escape") {
+      zone.champ.value = "";
+      if (minuteur) clearTimeout(minuteur);
+      validerEtAppliquer();
+    }
+  });
+
+  zone.effacer.addEventListener("click", () => {
+    zone.champ.value = "";
+    if (minuteur) clearTimeout(minuteur);
+    validerEtAppliquer();
+    zone.champ.focus();
+  });
 })();
