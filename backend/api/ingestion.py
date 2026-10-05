@@ -13,6 +13,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
+from backend import pilotage
 from backend.dependances import obtenir_stockage
 from backend.models import AccuseReception, LotPaquets
 from backend.securite import verifier_debit, verifier_jeton
@@ -44,6 +45,11 @@ def ingerer(
         paquet["details"] = details_reduits(paquet.get("details") or {})
 
     acceptes = stockage.enregistrer_lot(lot.session, lot.agent, propres)
+
+    # Diffusion en direct, **après** l'enregistrement : un paquet n'est montré que s'il a
+    # été conservé. L'ordre inverse afficherait des paquets absents de l'historique — et
+    # l'écart serait invisible.
+    pilotage.diffusion.publier(propres)
     communications = stockage.enregistrer_communications(
         lot.session, [communication.model_dump() for communication in lot.communications])
     detections = stockage.enregistrer_detections(

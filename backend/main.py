@@ -34,7 +34,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from backend.api import ingestion, paquets
+import atexit
+
+from backend import pilotage
+from backend.api import capture, ingestion, paquets
 from backend.config import configuration
 
 logging.basicConfig(
@@ -78,6 +81,16 @@ application.add_middleware(
 
 application.include_router(ingestion.router, prefix="/api/v1")
 application.include_router(paquets.router, prefix="/api/v1")
+application.include_router(capture.router, prefix="/api/v1")
+
+# À l'extinction du serveur, la capture lancée depuis l'interface est arrêtée. Sans cela,
+# l'agent survivrait au serveur : il garderait son interface réseau ouverte et continuerait
+# d'envoyer des paquets à un service disparu — un orphelin qu'on ne retrouve que par le
+# gestionnaire de tâches.
+# `atexit` plutôt qu'un événement de cycle de vie : cette version de FastAPI ne l'expose
+# plus, et un agent orphelin est exactement le piège qu'on veut éviter ici. Il ne se déclenche
+# pas sur un arrêt brutal — c'est écrit dans les limites du README.
+atexit.register(pilotage.pilote.arreter_si_besoin)
 
 application.mount("/static", StaticFiles(directory=str(DOSSIER_WEB / "static")), name="static")
 
