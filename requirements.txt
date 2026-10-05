@@ -1,0 +1,33 @@
+# -----------------------------------------------------------------------------
+#  Intelligent Network Packet Analyzer — dépendances
+#  Chaque paquet est justifié dans le README (§ Technologies). Résumé :
+#
+#    scapy        capture et décodage des protocoles réseau (Ethernet, IP, TCP,
+#                 UDP, DNS, ARP, ICMP, IPv6). Écrire ce décodage soi-même
+#                 représenterait plusieurs milliers de lignes.
+#    fastapi      backend HTTP : validation des entrées par les types, documentation
+#                 OpenAPI produite automatiquement, donc une API démontrable.
+#    uvicorn      serveur ASGI qui exécute FastAPI. Standard, éprouvé, asynchrone.
+#    pydantic     validation des données reçues de l'agent. Une fiche de paquet
+#                 malformée est refusée à l'entrée, avec un message précis.
+#    httpx        appels sortants de l'agent vers le backend, avec délai maximal.
+#    jinja2       gabarits HTML du tableau de bord (fourni avec FastAPI).
+#    python-dotenv lecture du fichier .env, pour qu'aucun secret ne soit dans le code.
+#    pytest       tests automatisés : paquets forgés, API, cas d'erreur.
+#
+#  Contraintes de version : bornes hautes pour éviter qu'une mise à jour majeure ne
+#  casse le projet sans prévenir. Aucune bibliothèque compilée n'est requise, sauf
+#  Scapy qui s'appuie sur le pilote Npcap déjà installé sur la machine.
+# -----------------------------------------------------------------------------
+
+scapy>=2.6,<3
+
+fastapi>=0.115,<1
+uvicorn[standard]>=0.32,<1
+pydantic>=2.9,<3
+
+httpx>=0.27,<1
+jinja2>=3.1,<4
+python-dotenv>=1.0,<2
+
+pytest>=8.0,<10

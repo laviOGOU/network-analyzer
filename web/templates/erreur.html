@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+{# Page d'erreur : elle dit ce qui s'est passé, et propose une suite.
+   Une trace technique irait dans le journal, jamais ici. #}
+<html lang="fr" data-theme="sombre">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ titre }} — Network Analyzer</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/dashboard.css') }}">
+</head>
+<body>
+  <main class="page-erreur">
+    <p class="page-erreur__code" aria-hidden="true">{{ code }}</p>
+    <h1>{{ titre }}</h1>
+    <p class="page-erreur__message">{{ message }}</p>
+    <p>
+      <a class="bouton bouton--principal" href="/">Retour au tableau de bord</a>
+    </p>
+  </main>
+</body>
+</html>

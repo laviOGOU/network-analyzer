@@ -1,0 +1,54 @@
+# -----------------------------------------------------------------------------
+#  Fichiers qui ne doivent JAMAIS être versionnés
+#  Ce fichier est commenté : chaque règle dit pourquoi elle existe, pour qu'on
+#  puisse la retirer en connaissance de cause plutôt que par peur.
+# -----------------------------------------------------------------------------
+
+# --- Secrets et environnement ------------------------------------------------
+# Contient le jeton d'agent, et plus tard les clés Supabase et des API.
+.env
+.env.local
+*.env
+
+# --- Environnements virtuels -------------------------------------------------
+# Des milliers de fichiers propres à une machine ; `requirements.txt` suffit à
+# reconstruire l'environnement ailleurs.
+.venv/
+venv/
+env/
+
+# --- Résidus d'exécution Python ---------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# --- Résultats de tests -----------------------------------------------------
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Données locales --------------------------------------------------------
+# Bases de travail et captures d'essai : reproductibles, donc inutiles au dépôt.
+*.db
+*.sqlite3
+captures/
+*.pcapng
+
+# ... sauf les captures de test, qui doivent être versionnées pour que les tests
+# soient reproductibles sur une autre machine. La négation doit suivre la règle
+# générale pour fonctionner.
+!tests/fixtures/*.pcap
+
+# --- Journaux ---------------------------------------------------------------
+# Ils contiennent des adresses IP réelles : jamais dans un dépôt.
+*.log
+serveur-*.log
+
+# --- Éditeurs et système ----------------------------------------------------
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini

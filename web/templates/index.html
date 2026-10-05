@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+{# =============================================================================
+   Tableau de bord — vue « Traffic »
+
+   Choix de conception
+   -------------------
+   Une seule source pour la mise en forme des lignes : le <template> ci-dessous. Le
+   JavaScript le recopie pour chaque paquet, au lieu de reconstruire du HTML dans le
+   script. Corriger l'affichage d'une ligne se fait donc à un seul endroit — le défaut
+   classique de ces tableaux est d'avoir deux mises en forme divergentes.
+
+   Les libellés de section sont en anglais (Traffic, Protocols, Sessions) conformément à
+   l'énoncé ; les explications sont en français, parce qu'elles s'adressent à quelqu'un
+   qui découvre le sujet.
+
+   Accessibilité : les zones qui se mettent à jour seules sont annoncées (`aria-live`),
+   les couleurs ne portent jamais seules une information, et le tableau garde un en-tête
+   associé à ses cellules.
+   ============================================================================= #}
+<html lang="fr" data-theme="sombre">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Intelligent Network Packet Analyzer — Traffic</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/dashboard.css') }}">
+</head>
+<body>
+<a class="lien-evitement" href="#paquets">Aller au tableau des paquets</a>
+
+<header class="entete">
+  <div class="entete__titre">
+    <span class="entete__marque" aria-hidden="true">◈</span>
+    <div>
+      <h1>Intelligent Network Packet Analyzer</h1>
+      <p class="entete__sous-titre">Traffic observé sur le réseau — vue en direct</p>
+    </div>
+  </div>
+  <div class="entete__actions">
+    <span class="etiquette" title="Environnement d'exécution">{{ environnement }}</span>
+    <span class="etat-connexion" id="etat-connexion" data-etat="attente" role="status">
+      <span class="etat-connexion__point" aria-hidden="true"></span>
+      <span id="etat-connexion-texte">Connexion…</span>
+    </span>
+    <button type="button" class="bouton bouton--fantome" id="bascule-theme"
+            aria-label="Changer de thème clair ou sombre">Thème</button>
+  </div>
+</header>
+
+{# Avertissement visible : le tableau de bord est public et les adresses affichées
+   appartiennent à un réseau réel. #}
+<div class="avertissement" role="note">
+  <strong>Données réelles, page publique.</strong>
+  Cette page montre les adresses IP, les ports et les noms de domaines observés sur un
+  réseau local. Aucun contenu de message n'est conservé — uniquement des métadonnées.
+  Ne capturez que sur un réseau que vous administrez ou pour lequel vous disposez d'une
+  autorisation écrite.
+</div>
+
+<main>
+  <section aria-labelledby="titre-traffic">
+    <h2 id="titre-traffic" class="titre-section">Traffic</h2>
+    <div class="cartes" id="cartes">
+      {# Valeurs remplies par le JavaScript : une seule source de vérité. #}
+      <article class="carte"><p class="carte__valeur" id="val-paquets">—</p><p class="carte__libelle">Packets received<span class="carte__aide">depuis le démarrage</span></p></article>
+      <article class="carte"><p class="carte__valeur" id="val-conserves">—</p><p class="carte__libelle">Kept in buffer<span class="carte__aide">les plus récents</span></p></article>
+      <article class="carte"><p class="carte__valeur" id="val-octets">—</p><p class="carte__libelle">Data volume<span class="carte__aide">métadonnées seules</span></p></article>
+      <article class="carte"><p class="carte__valeur" id="val-sessions">—</p><p class="carte__libelle">Sessions<span class="carte__aide">captures reçues</span></p></article>
+      <article class="carte"><p class="carte__valeur" id="val-partielles">—</p><p class="carte__libelle">Partial analyses<span class="carte__aide">paquets malformés</span></p></article>
+    </div>
+  </section>
+
+  <div class="colonnes">
+    <section aria-labelledby="titre-protocoles">
+      <h2 id="titre-protocoles" class="titre-section">Protocols</h2>
+      <ul class="repartition" id="repartition"></ul>
+    </section>
+
+    <section aria-labelledby="titre-sources">
+      <h2 id="titre-sources" class="titre-section">Top sources</h2>
+      <ul class="repartition" id="sources"></ul>
+    </section>
+  </div>
+
+  <section aria-labelledby="titre-paquets">
+    <div class="titre-section--ligne">
+      <h2 id="titre-paquets" class="titre-section">Packets</h2>
+      <div class="filtres">
+        <label class="sr-only" for="filtre-protocole">Filtrer par protocole</label>
+        <select id="filtre-protocole">
+          <option value="">Tous les protocoles</option>
+        </select>
+        <label class="sr-only" for="filtre-recherche">Rechercher</label>
+        <input id="filtre-recherche" type="search" placeholder="IP, domaine, port…"
+               autocomplete="off">
+        <button type="button" class="bouton bouton--fantome" id="bascule-pause"
+                aria-pressed="false">Pause</button>
+      </div>
+    </div>
+
+    <noscript>
+      <p class="message message--attention">
+        Cette page a besoin du JavaScript pour se rafraîchir. Sans lui, les chiffres et le
+        tableau restent vides. L'API reste consultable directement :
+        <code>/api/v1/packets</code>.
+      </p>
+    </noscript>
+
+    <div class="tableau-enveloppe">
+      <table class="tableau" id="tableau-paquets">
+        <caption class="sr-only">Paquets capturés, du plus récent au plus ancien</caption>
+        <thead>
+          <tr>
+            <th scope="col">Heure</th>
+            <th scope="col">Protocole</th>
+            <th scope="col">Source</th>
+            <th scope="col">Destination</th>
+            <th scope="col">Port</th>
+            <th scope="col">Taille</th>
+            <th scope="col">TTL</th>
+            <th scope="col">Détail</th>
+          </tr>
+        </thead>
+        <tbody id="corps-paquets"></tbody>
+      </table>
+    </div>
+    <p class="vide" id="tableau-vide" hidden>
+      Aucun paquet pour l'instant. Lancez l'agent :
+      <code>python agent/main.py --interface "Wi-Fi" --backend … --jeton …</code>
+    </p>
+  </section>
+
+  <section aria-labelledby="titre-sessions">
+    <h2 id="titre-sessions" class="titre-section">Sessions</h2>
+    <p class="aide">Une session correspond à un lancement de l'agent. En phase actuelle,
+       cette liste vit en mémoire et disparaît au redémarrage du backend.</p>
+    <ul class="liste-sessions" id="liste-sessions"></ul>
+  </section>
+</main>
+
+<footer class="pied">
+  <p>Exercice de formation — analyse de trafic réseau. L'enrichissement, les
+     communications (flows), la détection et les explications arrivent dans les phases
+     suivantes.</p>
+</footer>
+
+{# Mise en forme d'une ligne de paquet, recopiée par le JavaScript. #}
+<template id="gabarit-ligne">
+  <tr>
+    <td class="col-heure"></td>
+    <td><span class="pastille-protocole"></span></td>
+    <td class="col-source"></td>
+    <td class="col-destination"></td>
+    <td class="col-port"></td>
+    <td class="col-taille"></td>
+    <td class="col-ttl"></td>
+    <td class="col-detail"></td>
+  </tr>
+</template>
+
+<script src="{{ url_for('static', path='/dashboard.js') }}" defer></script>
+</body>
+</html>
