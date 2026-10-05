@@ -136,14 +136,21 @@
 /* Le logo et le nom de l'en-tête, repris de l'identité du projet : l'œil, puis le mot dont
    la seconde moitié porte le dégradé bleu → cyan du logo, et la ligne en capitales espacées
    entre deux tirets. */
-.entete__logo { width: 46px; height: 46px; flex: 0 0 auto; }
+/* Le logo porte sa propre lueur : une ombre portée colorée, très diffuse, qui imite la
+   lumière du logo sans alourdir le fichier SVG. */
+.entete__logo {
+  width: 60px;
+  height: 60px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, .35));
+}
 
 .entete__nom {
   /* La ponctuation typographique du titre est décorative : les deux tirets de la ligne du
      dessous suffisent à séparer le nom de sa description. */
   margin: 0;
-  font-size: clamp(1.35rem, 1.1rem + 1vw, 1.75rem);
-  font-weight: 600;
+  font-size: clamp(1.4rem, 1.1rem + 1.1vw, 1.9rem);
+  font-weight: 800;
   letter-spacing: -.01em;
   line-height: 1.1;
 }
@@ -165,9 +172,12 @@
 .entete__sous-titre {
   margin: .15rem 0 0;
   font-size: .68rem;
-  letter-spacing: .22em;
+  letter-spacing: .24em;
   text-transform: uppercase;
-  color: var(--texte-doux);
+  /* Le cyan du logo, comme sur l'identité — et non un gris : c'est ce qui rattache la ligne
+     de description à l'image plutôt qu'à une note de service. */
+  color: var(--accent-2);
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
