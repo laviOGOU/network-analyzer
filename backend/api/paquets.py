@@ -17,6 +17,8 @@ import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
+from backend.securite import verifier_jeton
+
 try:
     # Les seuils de détection sont définis dans l'agent, qui les applique. On les lit
     # pour les rendre visibles dans l'interface — c'est une exigence du sujet de pouvoir
@@ -35,6 +37,7 @@ from backend import export as mod_export
 from backend import filtres as mod_filtres
 from backend import noms as mod_noms
 from backend import recit as mod_recit
+from backend import profils as mod_profils
 from backend import statistiques as mod_statistiques
 
 #: L'analyse des anomalies vit avec l'agent, qui voit passer les paquets. Le backend ne doit
@@ -298,6 +301,43 @@ def lister_sessions(stockage: Annotated[Stockage, Depends(obtenir_stockage)]) ->
     """
     sessions = stockage.sessions()
     return {"sessions": sessions, "total": len(sessions)}
+
+
+@router.get("/profils", summary="Profils d'analyse enregistrés")
+def lister_profils() -> dict[str, Any]:
+    """Rend les profils disponibles : un nom, un filtre, une phrase qui dit à quoi il sert."""
+    profils = mod_profils.charger()
+    return {"profils": profils, "total": len(profils)}
+
+
+@router.post("/profils", summary="Enregistrer un profil d'analyse")
+def enregistrer_profil(
+    profil: dict[str, Any],
+    _jeton: Annotated[None, Depends(verifier_jeton)],
+) -> dict[str, Any]:
+    """Ajoute ou remplace un profil. **Écriture : jeton exigé.**
+
+    Le filtre est validé à l'enregistrement, par le même parseur que celui qui l'appliquera.
+    Un profil ne peut donc pas être enregistré avec une expression que l'application
+    refusera plus tard : l'erreur est refusée maintenant, quand celui qui la commet est
+    encore devant l'écran.
+    """
+    try:
+        profils = mod_profils.enregistrer(profil)
+    except mod_profils.ProfilInvalide as erreur:
+        raise HTTPException(status_code=400, detail=str(erreur)) from erreur
+    return {"profils": profils, "total": len(profils)}
+
+
+@router.delete("/profils/{nom}", summary="Supprimer un profil d'analyse")
+def supprimer_profil(
+    nom: str,
+    _jeton: Annotated[None, Depends(verifier_jeton)],
+) -> dict[str, Any]:
+    """Retire un profil. Supprimer un nom absent n'est pas une erreur : le résultat voulu est
+    atteint."""
+    profils = mod_profils.supprimer(nom)
+    return {"profils": profils, "total": len(profils)}
 
 
 @router.get("/statistiques", summary="Répartitions, extrémités et débit")

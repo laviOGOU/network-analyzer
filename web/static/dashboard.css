@@ -133,6 +133,25 @@
    Des barres plutôt qu'une bibliothèque de graphiques : la même information, lisible par
    un lecteur d'écran (le chiffre est écrit à côté), et pas une dépendance de plus à
    charger et à maintenir. */
+/* Le sélecteur de profils. Il remplit le champ de filtre au lieu de filtrer dans son coin :
+   ce qui s'applique reste visible et modifiable. */
+.choix-profil {
+  background: var(--surface);
+  color: var(--texte);
+  border: 1px solid var(--bordure);
+  border-radius: .4rem;
+  padding: .45rem .6rem;
+  font: inherit;
+  font-size: .85rem;
+  min-width: 10rem;
+  max-width: 100%;
+}
+
+.choix-profil:focus-visible {
+  outline: 2px solid var(--primaire);
+  outline-offset: 2px;
+}
+
 .grille-statistiques {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));

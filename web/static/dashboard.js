@@ -1466,3 +1466,69 @@ function signalerCriteresEcartes(champs) {
   charger();
   setInterval(charger, 15000);
 })();
+
+/* =============================================================== profils d'analyse
+
+   Un profil est un nom, un filtre et une phrase qui dit à quoi il sert. Les chercher dans le
+   code n'aurait pas de sens : ils sont servis par l'API, où ils sont validés à
+   l'enregistrement par le même parseur qui les applique.
+
+   Choisir un profil **remplit le champ de filtre** au lieu de filtrer autrement : ce qui
+   s'applique reste visible, et modifiable. Un filtre appliqué en secret derrière l'écran
+   serait impossible à vérifier. */
+(function () {
+  "use strict";
+
+  const choix = document.getElementById("choix-profil");
+  const champ = document.getElementById("champ-filtre");
+  const aide = document.getElementById("aide-filtre");
+  if (!choix || !champ) return;
+
+  let profils = [];
+
+  function remplir() {
+    choix.textContent = "";
+    const vide = document.createElement("option");
+    vide.value = "";
+    vide.textContent = profils.length ? "Profils…" : "Aucun profil";
+    choix.appendChild(vide);
+
+    profils.forEach((profil, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = profil.nom;
+      choix.appendChild(option);
+    });
+  }
+
+  function appliquer(index) {
+    const profil = profils[index];
+    if (!profil) return;
+
+    // On remplit le champ **et** on signale le changement : le filtre est appliqué par le
+    // même chemin que si l'utilisateur l'avait tapé. Un second chemin de filtrage finirait
+    // par diverger du premier.
+    champ.value = profil.filtre || "";
+    champ.dispatchEvent(new Event("input", { bubbles: true }));
+
+    if (aide && profil.description) {
+      aide.textContent = profil.description;
+    }
+    choix.value = "";
+  }
+
+  choix.addEventListener("change", () => {
+    if (choix.value !== "") appliquer(Number(choix.value));
+  });
+
+  fetch("/api/v1/profils", { headers: { Accept: "application/json" } })
+    .then((reponse) => (reponse.ok ? reponse.json() : null))
+    .then((donnees) => {
+      if (!donnees || !Array.isArray(donnees.profils)) return;
+      profils = donnees.profils;
+      remplir();
+    })
+    .catch(() => {
+      // Un sélecteur vide n'empêche pas de filtrer à la main : on ne bloque rien.
+    });
+})();

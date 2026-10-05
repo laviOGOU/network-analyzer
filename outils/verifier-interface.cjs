@@ -370,6 +370,31 @@ function verifier(intitule, condition, precision = "") {
            stats.resume.includes("examiné") && stats.resume.includes("sur 800"),
            `resume="${stats.resume}"`);
 
+  // Les profils d'analyse : le selecteur doit etre rempli par l'API.
+  await page.waitForFunction(
+    () => (document.querySelectorAll("#choix-profil option").length || 0) > 1,
+    { timeout: 20000 }).catch(() => {});
+  const profils = await page.evaluate(() => {
+    const options = [...document.querySelectorAll("#choix-profil option")].map((o) => o.textContent);
+    return { nombre: options.length, noms: options.slice(1, 4) };
+  });
+  verifier("les profils d'analyse sont proposes", profils.nombre > 1,
+           `${profils.nombre - 1} profil(s) : ${profils.noms.join(" · ")}`);
+
+  // Choisir un profil doit remplir le champ de filtre — pas filtrer en secret.
+  if (profils.nombre > 1) {
+    await page.selectOption("#choix-profil", "1");
+    await page.waitForTimeout(600);
+    const champ = await page.evaluate(() => document.getElementById("champ-filtre").value);
+    verifier("choisir un profil remplit le champ de filtre", champ !== "",
+             `champ = "${champ}"`);
+    await page.evaluate(() => {
+      document.getElementById("champ-filtre").value = "";
+      document.getElementById("champ-filtre").dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await page.waitForTimeout(400);
+  }
+
   verifier("aucune erreur JavaScript", erreursReelles.length === 0,
     erreursReelles.slice(0, 3).join(" | "));
 

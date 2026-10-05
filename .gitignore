@@ -57,3 +57,6 @@ serveur-*.log
 *.swp
 Thumbs.db
 desktop.ini
+
+# Configuration d'un poste, pas une propriete du logiciel.
+profils.json

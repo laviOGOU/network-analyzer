@@ -311,6 +311,22 @@ connexions : ces paquets ne seront jamais nommés, et rien n'est inventé pour c
 À l'écran, des barres CSS portent le chiffre écrit à côté : lisible par un lecteur d'écran,
 et sans bibliothèque de graphiques à charger.
 
+## Profils d'analyse
+
+Un profil est un **nom**, un **filtre** et une **phrase qui dit à quoi il sert**. Cinq sont
+proposés : *Tout*, *Web chiffré*, *Résolutions DNS*, *Trafic sortant*, *Conversations
+terminées*. Dans l'interface, un sélecteur les applique ; côté API, `GET /api/v1/profils` les
+rend (**écriture : jeton exigé**).
+
+**Un profil ne peut pas être enregistré avec un filtre invalide** : la validation se fait à
+l'enregistrement, par le même parseur qui l'appliquera. S'il existe, il fonctionne.
+
+**Choisir un profil remplit le champ de filtre** au lieu de filtrer en secret : ce qui
+s'applique reste visible et modifiable.
+
+Les profils vivent dans `profils.json`, **non versionné** — c'est la configuration d'un poste.
+Aucun secret n'y entre.
+
 ## Ce qui sort de l'ordinaire
 
 `GET /api/v1/anomalies` rend l'**Expert Info** du projet : les anomalies TCP observées,
@@ -493,7 +509,7 @@ from backend.explain import explications     # toutes les explications applicabl
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**358 tests**, dont :
+**375 tests**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole

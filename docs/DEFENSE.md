@@ -1388,3 +1388,76 @@ Mesurer le délai réel entre l'ouverture d'une connexion et sa disparition de l
 choisir : raccourcir la validité du cache, ou enrichir à l'ouverture d'une conversation
 plutôt qu'à chaque paquet — les flux étant suivis par l'analyseur, une connexion longue y
 est connue au moment où elle s'établit.
+
+
+---
+
+# Lot C — Profils d'analyse (fin du plan d'amélioration)
+
+## 1. Ce qui a été construit
+
+**`backend/profils.py`** — un profil est un **nom**, un **filtre** et une **phrase qui dit à
+quoi il sert**. Cinq sont proposés d'emblée : *Tout*, *Web chiffré*, *Résolutions DNS*,
+*Trafic sortant vers l'extérieur*, *Conversations terminées*.
+
+**L'API** : `GET /api/v1/profils` (lecture publique, comme tout le reste), `POST` et `DELETE`
+pour écrire — **jeton exigé**, comme pour l'ingestion.
+
+**L'interface** : un sélecteur dans la barre de filtre. Choisir un profil **remplit le champ
+de filtre** au lieu de filtrer dans son coin.
+
+## 2. Pourquoi ces choix
+
+**Un profil ne peut pas être enregistré avec un filtre invalide.** La validation se fait à
+l'enregistrement, par le **même parseur** que celui qui appliquera le filtre — le parseur du
+lot A. S'il existe, son filtre est applicable. C'est la différence entre refuser une erreur
+quand celui qui la commet est encore devant l'écran, et la découvrir en pleine analyse.
+
+**Un filtre s'applique à plusieurs listes, et chaque critère est appliqué là où il a un
+sens.** `port:443` concerne un paquet, `etat:fermée` une communication. La validation accepte
+donc un filtre qui s'applique **quelque part**, pas partout.
+
+**Choisir un profil remplit le champ, il ne filtre pas en secret.** Ce qui s'applique reste
+visible et modifiable. Un filtre appliqué derrière l'écran serait impossible à vérifier — et
+un résultat qu'on ne peut pas vérifier ne vaut rien dans un outil d'analyse.
+
+**Les profils ne sont pas versionnés.** Ils vivent dans `profils.json`, à côté du projet, et le
+fichier est dans `.gitignore` : c'est la configuration d'un poste, pas une propriété du
+logiciel. Aucun secret n'y entre — un profil décrit une façon de regarder, rien d'autre, et un
+test le vérifie.
+
+**Un fichier abîmé ne met pas l'application en panne.** Illisible, il fait retomber sur les
+profils proposés ; une entrée fautive est écartée sans perdre les autres.
+
+## 3. Trois questions de défense
+
+**1. Pourquoi ne pas mettre les profils dans la base de données ?**
+
+Parce qu'ils ne décrivent pas la capture, mais la façon de la regarder — et qu'ils
+appartiennent au poste, pas aux données. Les mettre en base les ferait dépendre d'une
+connexion, d'un schéma et d'une migration, pour une poignée de préférences. Si le besoin de
+les partager entre plusieurs postes apparaît, la décision se réexaminera : c'est un fichier,
+pas une architecture.
+
+**2. Un profil enregistré peut-il cesser de fonctionner ?**
+
+Non, et c'est tout l'intérêt de valider à l'enregistrement. Le filtre est vérifié par le
+parseur qui l'appliquera. La seule évolution possible serait qu'un champ disparaisse du
+parseur : la validation refuserait alors les nouveaux profils, et les anciens seraient écartés
+à la lecture sans faire échouer le reste.
+
+**3. Pourquoi une limite de profils ?**
+
+Parce qu'une liste qu'on ne lit plus ne sert plus. La limite porte sur la liste entière,
+profils proposés compris, et le refus est **explicite** : « Trop de profils : 40 au maximum.
+Supprimez-en un avant d'en ajouter. » Un refus muet laisserait croire à une panne.
+
+## 4. Deux défauts trouvés — dans mes propres données
+
+- **Un profil proposé avait un filtre invalide** : `etat:en cours`, sans guillemets, alors que
+  la syntaxe du lot A exige `etat:"en cours"` — la valeur contient une espace. Un profil livré
+  qui ne peut pas s'enregistrer serait une promesse en l'air.
+- **Ma validation était plus stricte que l'application.** Elle ne regardait que les paquets et
+  refusait donc « Conversations terminées » (`etat:fermée`), un profil parfaitement légitime.
+  Une validation plus stricte que ce qu'elle valide interdit des choses qui marchent : c'est un
+  défaut, pas de la prudence.
