@@ -614,6 +614,18 @@
   word-break: break-word;
 }
 
+/* La liste des faits enrichis : un terme, sa valeur. */
+.liste-faits {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+  gap: .2rem .75rem;
+  margin: .4rem 0 0;
+  font-size: .85rem;
+}
+
+.liste-faits dt { color: var(--texte-doux); }
+.liste-faits dd { margin: 0; overflow-wrap: anywhere; }
+
 .explication {
   border-top: 1px solid var(--bord);
   padding-top: 1rem;

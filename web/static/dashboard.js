@@ -664,6 +664,102 @@
     return enveloppe;
   }
 
+  /** Pose un intitulé juste avant un élément, sans toucher au reste de la page. */
+  function intituler(element, texte) {
+    if (!element || !element.parentElement) return;
+    const titre = document.createElement("h3");
+    titre.className = "bloc-intitule";
+    titre.textContent = texte;
+    element.parentElement.insertBefore(titre, element);
+  }
+
+  /**
+   * Le contexte externe d'une adresse — paragraphe 8 du sujet.
+   *
+   * Une seule adresse est enrichie : celle qui n'appartient pas au réseau local. Envoyer une
+   * adresse privée à un service externe ne renseignerait personne, et révélerait la structure
+   * du réseau observé — le module d'enrichissement la refuserait de toute façon, mais on ne
+   * la demande même pas.
+   *
+   * L'absence de résultat est annoncée telle quelle : « non disponible » n'est pas la même
+   * chose que « rien à signaler », et confondre les deux ferait croire à une adresse propre.
+   */
+  async function rendreExterne(communication) {
+    const conteneur = zone.detailCorps;
+    if (!conteneur) return;
+
+    const candidates = [communication.ip_b, communication.ip_a].filter(Boolean);
+    const privee = (adresse) => /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.|fe80:|f[cd])/i.test(String(adresse));
+    const externe = candidates.find((adresse) => !privee(adresse));
+
+    const bloc_ = document.createElement("div");
+    bloc_.className = "explication";
+
+    const titre = document.createElement("h4");
+    titre.className = "explication-titre";
+    titre.textContent = "Contexte externe";
+    bloc_.appendChild(titre);
+
+    if (!externe) {
+      const corps = document.createElement("p");
+      corps.className = "aide";
+      corps.textContent = "Aucune adresse publique dans cette communication : rien n'est "
+        + "envoyé à un service externe, et il n'y a donc rien à en dire.";
+      bloc_.appendChild(corps);
+      return conteneur.appendChild(bloc_);
+    }
+
+    const attente = document.createElement("p");
+    attente.className = "aide";
+    attente.textContent = `Interrogation du service externe pour ${externe}…`;
+    bloc_.appendChild(attente);
+
+    try {
+      const reponse = await fetch(`/api/v1/enrichment?ip=${encodeURIComponent(externe)}`,
+                                  { headers: { Accept: "application/json" } });
+      const donnees = await reponse.json();
+      attente.remove();
+
+      if (donnees.enrichi) {
+        const table = document.createElement("dl");
+        table.className = "liste-faits";
+        const champs = [
+          ["Adresse", donnees.ip],
+          ["Pays", donnees.pays],
+          ["Organisation", donnees.organisation],
+          ["Réseau", donnees.reseau],
+          ["Réputation", donnees.reputation],
+          ["Signalements", donnees.signalements],
+          ["Source", donnees.source],
+        ];
+        champs.forEach(([nom, valeur]) => {
+          if (valeur === undefined || valeur === null || valeur === "") return;
+          const terme = document.createElement("dt");
+          terme.textContent = nom;
+          const definition = document.createElement("dd");
+          definition.textContent = String(valeur);
+          table.appendChild(terme);
+          table.appendChild(definition);
+        });
+        bloc_.appendChild(table);
+      } else {
+        const corps = document.createElement("p");
+        corps.className = "aide";
+        corps.textContent = donnees.message
+          ? `Non disponible : ${donnees.message}`
+          : "Non disponible : le service externe n'a rien renvoyé pour cette adresse.";
+        bloc_.appendChild(corps);
+      }
+    } catch (erreur) {
+      attente.remove();
+      const corps = document.createElement("p");
+      corps.className = "aide";
+      corps.textContent = `Non disponible : ${erreur.message}.`;
+      bloc_.appendChild(corps);
+    }
+    conteneur.appendChild(bloc_);
+  }
+
   function rendreDetail(donnees) {
     zone.detailCorps.textContent = "";
 
@@ -678,6 +774,12 @@
       + (communication.etat_certain ? " (observé)" : " (déduit)")
       + ` · ${communication.paquets_total || 0} paquets · `
       + `${formaterOctets(communication.octets_total || 0)} · durée ${duree}`;
+
+    // Les quatre blocs du paragraphe 9 sont **nommés** dans le panneau. Les informations et
+    // l'explication existaient déjà, mais rien ne les intitulait : un lecteur qui découvre
+    // l'écran ne sait pas ce qu'il regarde.
+    intituler(zone.detailResume, "Informations techniques");
+    intituler(zone.detailCorps, "Analyse et explication");
 
     for (const explication of donnees.explications || []) {
       const enveloppe = document.createElement("div");
@@ -708,6 +810,8 @@
 
       zone.detailCorps.appendChild(enveloppe);
     }
+
+    rendreExterne(communication);
 
     // Rappel systématique : c'est la phrase qui protège le lecteur d'une conclusion trop
     // rapide, et elle doit être présente même quand la confiance est haute.

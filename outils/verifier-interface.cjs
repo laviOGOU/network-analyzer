@@ -139,6 +139,22 @@ function verifier(intitule, condition, precision = "") {
 
   const duree = (await page.locator("#detail-communication #detail-resume").textContent()) || "";
   verifier("le résumé chiffré est présent", /\d/.test(duree), duree.trim().slice(0, 80));
+
+  // La vue detaillee du paragraphe 9 : ses blocs doivent etre NOMMES, et le contexte externe
+  // annonce lui-meme son indisponibilite plutot que de laisser un vide.
+  await page.waitForTimeout(1200);   // le contexte externe est obtenu par un appel reseau
+  const detail = await page.evaluate(() => {
+    const panneau = document.getElementById("detail-communication");
+    const textes = [...panneau.querySelectorAll(".bloc-intitule, .explication-titre")]
+      .map((n) => n.textContent.trim());
+    return { textes, externe: textes.some((t) => /contexte externe/i.test(t)) };
+  });
+  verifier("les blocs du detail sont nommes",
+    detail.textes.some((t) => /informations techniques/i.test(t))
+    && detail.textes.some((t) => /analyse et explication/i.test(t)),
+    detail.textes.join(" | ").slice(0, 150));
+  verifier("le contexte externe est montre, ou dit qu'il est indisponible",
+    detail.externe, `bloc externe present : ${detail.externe}`);
   await page.locator("#detail-communication")
     .screenshot({ path: chemin.join(dossier, "02-detail.png") });
 

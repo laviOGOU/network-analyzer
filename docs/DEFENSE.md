@@ -1574,3 +1574,64 @@ l'adresse : chaque vue a la sienne, et se partage.
 Parce qu'elle n'est pas une information sur le trafic : c'est le contrôle qui **produit** le
 trafic. La ranger dans une vue ferait qu'on ne pourrait plus l'arrêter depuis les autres —
 c'est-à-dire au moment précis où l'on regarde autre chose.
+
+
+---
+
+# Vue détaillée : les blocs nommés, et le contexte externe
+
+## Ce qui a été ajouté
+
+**Les blocs du §9 sont maintenant intitulés** dans le panneau de détail : *Informations
+techniques* au-dessus des chiffres mesurés, *Analyse et explication* au-dessus des
+explications. Les blocs *Faits observés* et *Interprétation* portaient déjà leur nom — c'est le
+reste qui ne le portait pas, et un lecteur qui découvre l'écran ne sait pas ce qu'il regarde.
+
+**Le contexte externe** (§8, étape 7 de la démonstration) : le panneau interroge
+`/api/v1/enrichment` pour l'adresse publique de la communication et affiche ce que le service
+renvoie — pays, organisation, réseau, réputation, signalements, source.
+
+## Pourquoi ces choix
+
+**Une seule adresse est enrichie : celle qui n'appartient pas au réseau local.** Envoyer une
+adresse privée à un service externe ne renseignerait personne et révélerait la structure du
+réseau observé. Le module d'enrichissement la refuserait de toute façon — mais on ne la demande
+même pas.
+
+**L'absence de résultat est annoncée telle quelle.** « Non disponible » n'est pas la même chose
+que « rien à signaler » : confondre les deux ferait croire qu'une adresse est propre alors que
+le service n'a simplement pas répondu. L'attente est visible (« interrogation… »), et l'échec
+est écrit avec son motif.
+
+**L'ajout est additif.** Rien de l'existant n'a été réorganisé : les intitulés sont posés
+au-dessus de ce qui était déjà là. Une refonte du panneau aurait fait courir le risque de
+casser une vue qui fonctionne, pour un gain de présentation.
+
+## Ce qui reste imparfait — écrit ici plutôt que sous-entendu
+
+Les quatre blocs du §9 sont **nommés**, mais pas encore **séparés en quatre panneaux** :
+l'état de la communication et sa certitude restent sur la ligne des informations techniques au
+lieu de former un bloc *Risque / état* distinct. C'est suffisant pour une lecture, insuffisant
+pour une démonstration qui veut montrer les quatre blocs l'un après l'autre.
+
+## Trois questions de défense
+
+**1. Pourquoi enrichir une seule adresse et pas les deux ?**
+
+Parce que l'autre est celle du réseau local, et qu'un service externe ne connaît pas votre
+réseau. Lui envoyer `192.168.1.116` reviendrait à lui transmettre la structure interne du
+réseau observé pour ne rien apprendre en retour.
+
+**2. Que se passe-t-il si l'API externe est absente ou en panne ?**
+
+Le panneau écrit « non disponible » avec le motif, et la communication reste entièrement
+lisible : les informations techniques, l'explication et les faits observés ne dépendent pas du
+service externe. L'enrichissement **ajoute**, il ne conditionne rien — c'est ce qui permet à
+l'outil de fonctionner sur un réseau isolé.
+
+**3. Pourquoi ne pas avoir fusionné les explications en un seul bloc ?**
+
+Parce qu'une communication peut porter **plusieurs** explications, chacune avec son niveau de
+confiance et sa source (règle écrite ou reformulation par IA). Les fondre en un texte unique
+ferait perdre cette distinction — or c'est précisément ce que le §4 demande de préserver :
+savoir ce qui est observé et ce qui est interprété.

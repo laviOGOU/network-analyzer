@@ -311,6 +311,16 @@ connexions : ces paquets ne seront jamais nommés, et rien n'est inventé pour c
 À l'écran, des barres CSS portent le chiffre écrit à côté : lisible par un lecteur d'écran,
 et sans bibliothèque de graphiques à charger.
 
+## Le détail d'une communication, et son contexte externe
+
+Le panneau de détail intitule ses blocs comme le §9 les nomme — **Informations techniques**,
+**Analyse et explication** — et affiche le **contexte externe** de l'adresse publique :
+pays, organisation, réseau, réputation, signalements, source.
+
+Seule l'adresse **publique** est envoyée au service : une adresse privée ne renseignerait
+personne et révélerait la structure du réseau observé. Et l'absence de réponse est écrite
+« non disponible » avec son motif — distincte de « rien à signaler ».
+
 ## Profils d'analyse
 
 Un profil est un **nom**, un **filtre** et une **phrase qui dit à quoi il sert**. Cinq sont
@@ -530,7 +540,7 @@ from backend.explain import explications     # toutes les explications applicabl
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**375 tests** · **48 vérifications navigateur**, dont :
+**375 tests** · **50 vérifications navigateur**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole
