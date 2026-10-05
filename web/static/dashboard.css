@@ -133,11 +133,46 @@
    Des barres plutôt qu'une bibliothèque de graphiques : la même information, lisible par
    un lecteur d'écran (le chiffre est écrit à côté), et pas une dépendance de plus à
    charger et à maintenir. */
-/* Le logo de l'en-tête. Le mot « Scope » reprend le cyan du logo : l'identité se lit dans
-   le titre, pas seulement dans l'image — et elle survit si le SVG ne se charge pas. */
-.entete__logo { width: 44px; height: 44px; flex: 0 0 auto; }
+/* Le logo et le nom de l'en-tête, repris de l'identité du projet : l'œil, puis le mot dont
+   la seconde moitié porte le dégradé bleu → cyan du logo, et la ligne en capitales espacées
+   entre deux tirets. */
+.entete__logo { width: 46px; height: 46px; flex: 0 0 auto; }
 
-.entete__nom-suite { color: var(--accent-2); }
+.entete__nom {
+  /* La ponctuation typographique du titre est décorative : les deux tirets de la ligne du
+     dessous suffisent à séparer le nom de sa description. */
+  margin: 0;
+  font-size: clamp(1.35rem, 1.1rem + 1vw, 1.75rem);
+  font-weight: 600;
+  letter-spacing: -.01em;
+  line-height: 1.1;
+}
+
+/* « Scope » porte le dégradé du logo. La couleur pleine sert de repli : un navigateur qui
+   ignore `background-clip` afficherait sinon du texte transparent — c'est-à-dire rien. */
+.entete__nom-suite {
+  color: var(--accent-2);
+  background-image: linear-gradient(100deg, var(--accent) 0%, var(--accent-2) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .entete__nom-suite { color: transparent; }
+}
+
+/* La ligne de description : capitales espacées entre deux tirets, comme sur l'identité. */
+.entete__sous-titre {
+  margin: .15rem 0 0;
+  font-size: .68rem;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--texte-doux);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 
 /* ------------------------------------------------- accueil et guide d'utilisation
    Un voile plein écran doit rester lisible sur un écran de téléphone comme sur un grand
@@ -931,7 +966,9 @@ code { background: var(--surface-2); padding: .1rem .35rem; border-radius: 5px; 
 }
 .entete__titre { display: flex; align-items: center; gap: .8rem; min-width: 0; }
 .entete__marque { font-size: 1.7rem; color: var(--accent); line-height: 1; }
-.entete__sous-titre { margin: .1rem 0 0; color: var(--texte-doux); font-size: .85rem; }
+/* (Une seconde règle `.entete__sous-titre` vivait ici et écrasait la première : la taille et
+   la marge venaient de celle-ci, le reste de l'autre. Deux définitions pour un même sélecteur
+   finissent toujours par se contredire — celle-ci a été fusionnée avec la principale.) */
 .entete__actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 
 .etiquette {
