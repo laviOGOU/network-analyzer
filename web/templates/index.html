@@ -21,7 +21,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Intelligent Network Packet Analyzer — Traffic</title>
+  <title>FlowScope — Analyseur de trafic réseau</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
   <link rel="stylesheet" href="{{ url_for('static', path='/dashboard.css') }}">
 </head>
 <body>
@@ -29,10 +30,10 @@
 
 <header class="entete">
   <div class="entete__titre">
-    <span class="entete__marque" aria-hidden="true">◈</span>
+    <img class="entete__logo" src="/static/logo.svg" alt="" width="44" height="44">
     <div>
-      <h1>Intelligent Network Packet Analyzer</h1>
-      <p class="entete__sous-titre">Traffic observé sur le réseau — vue en direct</p>
+      <h1>Flow<span class="entete__nom-suite">Scope</span></h1>
+      <p class="entete__sous-titre">Network Traffic Analyzer — capturer, analyser, expliquer</p>
     </div>
   </div>
   <div class="entete__actions">

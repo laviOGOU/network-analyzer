@@ -52,7 +52,7 @@ DOSSIER_WEB = RACINE_DEPOT / "web"
 gabarits = Jinja2Templates(directory=str(DOSSIER_WEB / "templates"))
 
 application = FastAPI(
-    title="Intelligent Network Packet Analyzer",
+    title="FlowScope — Network Traffic Analyzer",
     description=(
         "Reçoit les paquets analysés par l'agent local, les conserve et les présente.\n\n"
         "L'écriture (`/api/v1/ingest`) exige un jeton d'agent ; la lecture est publique."

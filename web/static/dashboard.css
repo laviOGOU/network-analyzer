@@ -133,6 +133,12 @@
    Des barres plutôt qu'une bibliothèque de graphiques : la même information, lisible par
    un lecteur d'écran (le chiffre est écrit à côté), et pas une dépendance de plus à
    charger et à maintenir. */
+/* Le logo de l'en-tête. Le mot « Scope » reprend le cyan du logo : l'identité se lit dans
+   le titre, pas seulement dans l'image — et elle survit si le SVG ne se charge pas. */
+.entete__logo { width: 44px; height: 44px; flex: 0 0 auto; }
+
+.entete__nom-suite { color: var(--accent-2); }
+
 /* ------------------------------------------------- accueil et guide d'utilisation
    Un voile plein écran doit rester lisible sur un écran de téléphone comme sur un grand
    moniteur : la boîte défile en interne plutôt que de dépasser la fenêtre. Un guide qu'on ne
@@ -822,7 +828,12 @@ body.guide-ouvert { overflow: hidden; }
   --texte-doux:  #A3AFC2;
   --texte-faible:#8B98AC;
 
-  --accent:      #4C9AFF;
+  /* Bleu électrique et cyan, les couleurs du logo. Deux accents et non un seul, parce
+     qu'ils ne servent pas à la même chose : le bleu porte le texte et les commandes (6,9:1
+     sur ce fond), le cyan souligne sans être lu comme du texte (11:1). Le cyan sur fond clair
+     serait illisible : c'est pour ça qu'il n'est pas employé pour écrire. */
+  --accent:      #4C8DFF;
+  --accent-2:    #22D3EE;
   --accent-doux: #16213A;
   --succes:      #4ADE80;
   --attention:   #F0B45C;
@@ -851,6 +862,7 @@ body.guide-ouvert { overflow: hidden; }
   --attention:   #B45309;
   --danger:      #C1121F;
   --ombre:       0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.08);
+  --accent-2:    #0E7490;
 }
 
 @media (prefers-color-scheme: light) {
