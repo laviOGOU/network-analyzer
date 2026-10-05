@@ -25,6 +25,13 @@ une machine de ce réseau ne quittent jamais ce réseau. L'outil est donc coupé
 Un **mode replay** (import d'un fichier `.pcap`) permettra de rejouer une capture pour des
 tests reproductibles. Il arrive après la phase 2, quand le format d'entrée sera figé.
 
+## Aperçu
+
+![Tableau de bord — vue Traffic](docs/capture-phase1.png)
+
+*Capture réelle : 1 264 paquets reçus d'un agent sur réseau Wi-Fi, IPv4 et IPv6 mêlés,
+six protocoles identifiés.*
+
 ## Fonctionnement
 
 ```
