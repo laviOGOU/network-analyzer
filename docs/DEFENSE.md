@@ -1116,3 +1116,86 @@ piège que `formaterOctets` au lot A — le second module ne voit pas la fermetu
 Les deux fonctions sont maintenant exposées explicitement, avec le commentaire qui explique
 pourquoi. **Une interface qui ne fait rien en silence est plus difficile à diagnostiquer
 qu'une interface qui plante.**
+
+
+---
+
+# Lot C — Expert Info (première partie)
+
+## 1. Ce qui a été construit
+
+**Le prérequis structurel d'abord.** L'analyseur n'extrayait ni `seq`, ni `ack`, ni la
+fenêtre, ni la taille de charge utile — sans quoi aucune analyse de retransmission n'est
+possible. Ces quatre valeurs sont désormais lues, et placées **en tête** de la liste des
+détails conservés, pour qu'elles survivent à la réduction.
+
+`longueur_transport` contenait `tcp.dataofs`, c'est-à-dire la longueur de l'**en-tête** : la
+confondre avec la charge utile aurait faussé tout calcul de volume applicatif.
+
+**`agent/anomalies.py`** — quatre anomalies mesurables, chacune avec ses critères écrits :
+
+    retransmission     même sens, même numéro de séquence, charge utile non nulle
+    poignee_incomplete un SYN, et aucun SYN-ACK en réponse
+    reset_inattendu    un RST en PREMIER paquet de la conversation
+    fenetre_nulle      champ « fenêtre » à zéro
+
+**`GET /api/v1/anomalies`** — l'Expert Info du projet, avec son compte par famille et le
+nombre de paquets examinés.
+
+## 2. Pourquoi ces choix
+
+**Une anomalie est un fait, jamais une conclusion.** Une retransmission signale presque
+toujours un réseau lent, pas une attaque. Le niveau rendu est donc `observation`, et aucune
+anomalie isolée ne produit une alerte — la règle des trois indices convergents reste
+entière, et c'est `detection.py` qui en décide.
+
+**Le nombre de paquets examinés accompagne toujours le résultat.** Sans lui, une liste vide
+ne distingue pas « rien d'anormal » de « rien à analyser ». C'est le silence trompeur que ce
+projet refuse partout ailleurs.
+
+**La charge utile n'est jamais conservée — seulement sa taille.** Un analyseur qui stockerait
+le contenu d'un échange finirait par stocker un mot de passe, et il suffirait d'une fois. Une
+longueur suffit à repérer une retransmission ou une fenêtre saturée.
+
+**Le faux positif est traqué autant que le vrai.** Un accusé de réception pur reprend
+souvent le numéro de séquence du paquet précédent : sans la condition sur la charge utile, la
+liste des retransmissions se remplirait de bruit — et une liste qu'on ne peut pas croire ne
+sert à rien.
+
+## 3. Trois questions de défense
+
+**1. Une retransmission, est-ce un problème de sécurité ?**
+
+Presque jamais. C'est le plus souvent un paquet perdu sur le chemin, un Wi-Fi instable ou un
+récepteur saturé — c'est-à-dire le fonctionnement normal d'un réseau qui se rattrape. La
+présenter comme une menace serait une faute : un outil qui crie au loup à chaque
+retransmission cesse d'être lu, et cesse donc d'être utile le jour où quelque chose de
+sérieux se produit.
+
+**2. Pourquoi une fenêtre à zéro est-elle signalée si c'est normal ?**
+
+Parce que « normal » n'est pas « sans intérêt ». Une fenêtre à zéro explique une pause
+inexpliquée : le récepteur demande à l'autre de s'arrêter parce que son tampon est plein.
+Sans cette observation, l'utilisateur voit un trou de plusieurs secondes et ne comprend pas.
+Signalée comme observation, avec la mention « mécanisme de régulation normal », elle
+éclaire au lieu d'inquiéter.
+
+**3. Pourquoi ne pas détecter davantage d'anomalies ?**
+
+Parce qu'une règle qu'on ne peut pas expliquer ne vaut rien ici. Les quatre retenues sont
+mesurables avec ce que l'analyseur conserve, et chacune correspond à un phénomène qu'un
+débutant peut retrouver dans les paquets et vérifier lui-même. Une détection qu'on ne peut
+pas défendre ligne par ligne serait un gadget.
+
+## 4. Ce qui a été trouvé en écrivant cette partie
+
+- **Mon code fusionnait les drapeaux de toute une conversation**, donc un ACK ordinaire
+  suffisait à innocenter une demande d'ouverture restée sans réponse. Or un ACK apparaît sur
+  presque tous les paquets d'une conversation établie : la détection ne pouvait pas
+  fonctionner. **C'est mon propre test qui a exprimé la bonne exigence** — « un ACK seul ne
+  prouve pas une réponse » — et le code a été corrigé pour chercher un SYN-ACK, c'est-à-dire
+  un paquet portant SYN *et* ACK.
+- **Trois fixtures de test employaient des noms de drapeaux abrégés** (`S`, `A`, `R`) là où
+  les données réelles portent `SYN`, `ACK`, `RST`. Les tests échouaient, pas le code — mais
+  le temps perdu était le même. La forme des données se relève sur une réponse réelle, elle
+  ne se devine pas.

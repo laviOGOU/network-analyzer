@@ -169,6 +169,25 @@ def _transport(paquet: Any, fiche: dict[str, Any]) -> None:
         fiche["port_destination"] = _entier(getattr(tcp, "dport", None))
         fiche["flags_tcp"] = _flags_tcp(tcp)
         fiche["longueur_transport"] = _entier(getattr(tcp, "dataofs", None))
+
+        # Numéros de séquence et fenêtre. Sans eux, deux questions restaient sans réponse :
+        # « ce paquet a-t-il déjà été envoyé ? » (retransmission) et « ce paquet est-il
+        # arrivé dans l'ordre ? » — c'est-à-dire l'essentiel de l'Expert Info.
+        #
+        # `dataofs` donne la longueur de l'**en-tête**, pas celle des données : la
+        # confondre avec la charge utile fausserait tout calcul de volume applicatif.
+        fiche["details"]["seq"] = _entier(getattr(tcp, "seq", None))
+        fiche["details"]["ack"] = _entier(getattr(tcp, "ack", None))
+        fiche["details"]["fenetre"] = _entier(getattr(tcp, "window", None))
+
+        # On ne conserve que la **taille** de la charge utile, jamais son contenu. Un
+        # analyseur qui stockerait le contenu d'un échange finirait par stocker un mot de
+        # passe — et il suffirait d'une fois. Une longueur suffit à repérer une
+        # retransmission ou une fenêtre saturée.
+        try:
+            fiche["details"]["charge_utile"] = len(bytes(tcp.payload))
+        except Exception:                                # noqa: BLE001
+            fiche["details"]["charge_utile"] = 0
     elif paquet.haslayer(UDP):
         udp = paquet[UDP]
         fiche["protocole"] = "UDP"

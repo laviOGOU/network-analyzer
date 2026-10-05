@@ -33,7 +33,7 @@ from backend import filtres
 #: Nombre de clés de détail conservées par paquet. Borné, parce que ce qui vient du réseau
 #: ne doit pas pouvoir faire grossir la base à volonté — mais assez large pour porter ce
 #: dont les vues ont besoin, y compris les deux clés qui relient une adresse à son nom.
-MAX_DETAILS_CONSERVES = 12
+MAX_DETAILS_CONSERVES = 16
 
 
 class Stockage:
@@ -389,7 +389,10 @@ def details_reduits(details: dict[str, Any]) -> dict[str, Any]:
     # Les clés de TLS et de HTTP ont été ajoutées avec leurs fonctionnalités : sans elles
     # ici, elles seraient jetées à l'ingestion, et l'interface afficherait un vide que
     # personne ne saurait expliquer. C'est l'erreur qui a déjà coûté les noms de domaine.
-    ordre = ("dns_question", "dns_reponse_nom", "dns_adresse", "dns_type", "dns_reponse",
+    # `seq`, `ack`, `fenetre` et `charge_utile` sont en tete : ce sont eux qui portent les
+    # analyses de l'Expert Info, et ils doivent survivre meme si la limite est atteinte.
+    ordre = ("seq", "ack", "fenetre", "charge_utile",
+             "dns_question", "dns_reponse_nom", "dns_adresse", "dns_type", "dns_reponse",
              "tls_sni", "tls_version", "http_methode", "http_hote", "http_code",
              "icmp_lisible", "type_icmp", "operation_arp", "tronque", "type_ethernet",
              "tls_illisible", "http_illisible")

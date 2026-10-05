@@ -278,6 +278,20 @@ connexions abandonnées.
 n'interroge que des adresses publiques — jamais 192.168.x, 10.x ou fe80::, qu'aucun service
 tiers ne peut renseigner et qui décriraient votre réseau local à un tiers.
 
+## Ce qui sort de l'ordinaire
+
+`GET /api/v1/anomalies` rend l'**Expert Info** du projet : les anomalies TCP observées,
+chacune avec les **critères** qui l'ont déclenchée, et le nombre de paquets examinés.
+
+    retransmission     même sens, même numéro de séquence, charge utile non nulle
+    poignee_incomplete un SYN, et aucun SYN-ACK en réponse
+    reset_inattendu    un RST en premier paquet de la conversation
+    fenetre_nulle      champ « fenêtre » à zéro
+
+**Une anomalie est un fait mesuré, jamais une conclusion.** Le niveau rendu est
+`observation` : une retransmission signale presque toujours un réseau lent, pas une attaque,
+et aucune anomalie isolée ne produit une alerte.
+
 ## Raconter une conversation
 
 Dans l'interface, un bouton **Raconter** sur chaque ligne de communication ouvre le récit.
@@ -513,6 +527,9 @@ Dix scénarios manuels, avec leur résultat attendu, sont décrits dans
 Rédigées honnêtement, comme demandé. **Aucune de ces limites n'est cachée par le code :
 ce qui n'est pas fait n'est pas simulé.**
 
+- **L'Expert Info ne couvre que quatre familles** — retransmission, poignée de main
+  incomplète, RST inattendu, fenêtre nulle. Les paquets hors séquence et les délais anormaux
+  ne sont pas encore analysés.
 - **Pas de déchiffrement TLS, aucun proxy d'interception.** Une session chiffrée ne livre que
   son SNI et la version annoncée. Le contenu reste illisible — ce n'est pas une limite
   technique à contourner, c'est la position du projet.

@@ -35,6 +35,14 @@ from backend import export as mod_export
 from backend import filtres as mod_filtres
 from backend import noms as mod_noms
 from backend import recit as mod_recit
+
+#: L'analyse des anomalies vit avec l'agent, qui voit passer les paquets. Le backend ne doit
+#: pas dépendre de ce dossier : un déploiement peut les séparer — et c'est le cas prévu par
+#: `docs/DEPLOIEMENT.md`. L'import est donc défensif, et la route le dit quand il échoue.
+try:
+    from agent import anomalies as mod_anomalies
+except ImportError:                                      # pragma: no cover
+    mod_anomalies = None
 from backend import filtres_sql as mod_filtres_sql
 from backend.dependances import obtenir_enrichissement, obtenir_stockage
 from backend.enrichment import Enrichissement
@@ -289,6 +297,38 @@ def lister_sessions(stockage: Annotated[Stockage, Depends(obtenir_stockage)]) ->
     """
     sessions = stockage.sessions()
     return {"sessions": sessions, "total": len(sessions)}
+
+
+@router.get("/anomalies", summary="Expert Info — ce qui sort de l'ordinaire")
+def lister_anomalies(
+    stockage: Annotated[Stockage, Depends(obtenir_stockage)],
+    limite: Annotated[int, Query(ge=1, le=mod_anomalies.PAQUETS_ANALYSES if mod_anomalies else 3000)] = 3000,
+) -> dict[str, Any]:
+    """Rend les anomalies TCP observées dans les paquets conservés.
+
+    Une anomalie est un **fait mesuré** — « ce numéro de séquence a été envoyé deux fois » —
+    jamais une conclusion. Ce n'est pas un détail de rédaction : une retransmission signale
+    presque toujours un réseau lent, pas une attaque, et la présenter comme une menace
+    rendrait l'outil inutilisable en pratique. Le niveau rendu est donc `observation`, et
+    aucune anomalie isolée ne produit une alerte.
+    """
+    if mod_anomalies is None:
+        # Le backend ne dépend pas du dossier de l'agent : l'analyse vit avec la capture.
+        # On le dit, plutôt que de rendre une liste vide qu'on croirait être une absence
+        # d'anomalie.
+        return {
+            "disponible": False,
+            "paquets_examines": 0, "total": 0, "comptes": {}, "anomalies": [],
+            "niveau": "observation",
+            "note": "L'analyse des anomalies n'est pas disponible dans ce déploiement "
+                    "(module agent/anomalies.py absent). Une liste vide ici ne veut pas "
+                    "dire « rien d'anormal ».",
+        }
+
+    paquets = stockage.paquets(limite=limite)
+    resultat = mod_anomalies.analyser(paquets)
+    resultat["disponible"] = True
+    return resultat
 
 
 @router.get("/flows/recit", summary="Récit d'une communication, en langage humain")
