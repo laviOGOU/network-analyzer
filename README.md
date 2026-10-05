@@ -285,11 +285,14 @@ l'interface l'affiche en tête de la colonne « Détail ». Le côté local se d
 l'**adresse**, jamais par le port seul : le port 443 est tenu par le navigateur *et* par le
 serveur distant.
 
-**⚠️ Fonctionnalité non aboutie.** Sur quatre captures réelles, **aucune fiche n'a porté de
-nom de programme**, alors que le mécanisme fonctionne au niveau unitaire. La cause probable :
-la table des connexions est un instantané gardé cinq secondes, et une connexion qui vit moins
-d'une seconde a disparu quand le paquet est analysé. L'affichage reste correct sans elle —
-mais ne pas compter sur cette information tant qu'elle n'a pas été mesurée.
+**Sur une capture réelle, 953 paquets sur 1000 portent un nom de programme** (95 %), dans
+les deux sens de la conversation : `chrome.exe`, `Telegram.exe`, `OneDrive.Sync.Service.exe`,
+`svchost.exe`…
+
+La table des connexions est relue **quand un port n'y est pas trouvé**, au plus une fois par
+seconde : sans cette relecture, un instantané vieux de cinq secondes ignore toute connexion
+ouverte depuis moins longtemps — mesuré : 29 ports locaux dans les paquets, 122 dans la
+table, **8 seulement en commun**.
 
 Sans droits administrateur, Windows ne donne pas le propriétaire d'environ un tiers des
 connexions : ces paquets ne seront jamais nommés, et rien n'est inventé pour combler le vide.
@@ -557,9 +560,8 @@ Dix scénarios manuels, avec leur résultat attendu, sont décrits dans
 Rédigées honnêtement, comme demandé. **Aucune de ces limites n'est cachée par le code :
 ce qui n'est pas fait n'est pas simulé.**
 
-- **L'association port → processus n'a produit aucun résultat sur trafic réel** (voir la
-  section correspondante). Livrée, testée au niveau unitaire, non concluante en conditions
-  réelles — la cause probable est la durée de vie des connexions face à la validité du cache.
+- **L'association port → processus dépend d'un cache relu au plus une fois par seconde.**
+  Une connexion ouverte et fermée entre deux relevés ne sera pas nommée.
 - **Un tiers des connexions n'a pas de processus connu** sans droits administrateur. C'est
   une limite de Windows, pas un défaut de l'outil.
 - **Le graphique de débit n'a pas d'axe des temps.** Chaque barre porte son décalage en

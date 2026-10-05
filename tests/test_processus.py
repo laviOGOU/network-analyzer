@@ -164,9 +164,13 @@ def test_l_enrichissement_n_ajoute_la_cle_que_si_un_processus_est_trouve():
     # La table porte une entrée qui ne correspond pas : elle doit être **non vide**, sans
     # quoi le cache la considère absente et la reconstruit — en écrasant celle qu'on
     # injecte. Un dictionnaire vide est faux en Python, et c'est le piège.
-    classe._table = {("TCP", 1): {"nom": "autre.exe", "pid": 9}}
+    classe._table = {("TCP", 65001): {"nom": "autre.exe", "pid": 9}}
     classe._locales = LOCALES
     classe._construite_a = time.monotonic()
+    # La relecture est neutralisée : sans cela le test lirait la table **du système qui
+    # l'exécute**, et il réussirait ou échouerait selon les connexions du moment. Un test
+    # dépendant de l'état de la machine n'est pas un test.
+    classe._relire = lambda: (classe._table, LOCALES)
 
     sans = fiche("192.168.1.5", 52344, "8.8.8.8", 2)
     classe.enrichir(sans)
@@ -177,6 +181,56 @@ def test_l_enrichissement_n_ajoute_la_cle_que_si_un_processus_est_trouve():
     classe.enrichir(avec)
     assert avec["details"]["processus_local"] == "chrome.exe"
     assert avec["details"]["processus_pid"] == 1234
+
+
+def test_une_relecture_rattrape_une_connexion_absente_de_l_instantane():
+    """Le défaut mesuré : un instantané gardé cinq secondes ignore les connexions récentes.
+
+    Sur une capture réelle, 29 ports locaux apparaissaient dans les paquets, 122 dans la
+    table, et 8 seulement étaient communs. La relecture — au plus une fois par seconde —
+    est ce qui rattrape une connexion ouverte depuis moins longtemps que le cache.
+    """
+    import time
+
+    classe = processus.TableCachee()
+    classe._table = {("TCP", 1): {"nom": "autre.exe", "pid": 9}}
+    classe._locales = LOCALES
+    classe._construite_a = time.monotonic()
+
+    appels = {"nombre": 0}
+
+    def relire():
+        appels["nombre"] += 1
+        return ({("TCP", 52344): {"nom": "chrome.exe", "pid": 1234}}, LOCALES)
+
+    classe._relire = relire
+    fiche_recente = fiche("192.168.1.5", 52344, "140.82.121.4", 443)
+    classe.enrichir(fiche_recente)
+
+    assert appels["nombre"] == 1, "la table n'a pas été relue"
+    assert fiche_recente["details"]["processus_local"] == "chrome.exe"
+
+
+def test_la_relecture_est_bornee_dans_le_temps():
+    """Sans borne, un port introuvable déclencherait un appel système par paquet."""
+    import time
+
+    classe = processus.TableCachee()
+    classe._table = {("TCP", 1): {"nom": "autre.exe", "pid": 9}}
+    classe._locales = LOCALES
+    classe._construite_a = time.monotonic()
+
+    appels = {"nombre": 0}
+
+    def relire():
+        appels["nombre"] += 1
+        return ({("TCP", 1): {"nom": "autre.exe", "pid": 9}}, LOCALES)
+
+    classe._relire = relire
+    for _ in range(5):
+        classe.enrichir(fiche("192.168.1.5", 55555, "8.8.8.8", 80))
+
+    assert appels["nombre"] <= 1, f"trop de relectures : {appels['nombre']}"
 
 
 def test_sans_psutil_le_module_ne_leve_pas_d_erreur():

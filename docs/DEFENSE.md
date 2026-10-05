@@ -1315,20 +1315,32 @@ ce n'est pas un défaut à corriger, c'est une limite du système. L'interface n
   serveur distant. Le côté local se détermine par l'**adresse**, jamais par le port seul —
   sinon on nommerait le mauvais programme une fois sur deux.
 
-## 3. Ce qui n'est PAS prouvé — et je ne le présenterai pas autrement
+## 3. Ce qui n'allait pas — et la cause réelle
 
-**Sur quatre captures réelles, aucune fiche n'a porté de nom de programme.** Le mécanisme
-est juste au niveau unitaire et directement démontrable, mais il ne produit rien sur le
-trafic réel. La cause exacte n'est pas établie.
+**Sur cinq captures réelles, aucune fiche ne portait de nom de programme.** J'ai écrit ici,
+dans la version précédente de ce document, que la cause était probablement la durée de vie
+des connexions face à la validité du cache. **C'était faux.**
 
-L'explication la plus probable, et elle est cohérente avec ce que le module fait : **la table
-est un instantané gardé cinq secondes**, alors que les connexions observées vivent souvent
-moins d'une seconde. Au moment où le paquet est analysé, la connexion est déjà close, et son
-port n'est plus dans la table. Une connexion persistante — messagerie, éditeur de code,
-navigation — devrait être nommée ; un aller-retour bref, non.
+Deux hypothèses ont été testées, et écartées par la mesure :
 
-Tant que ce n'est pas mesuré, l'affichage du programme reste une fonctionnalité
-**inutilisable**, et le README le dit.
+- *les adresses locales ne correspondaient pas* — écartée : 327 paquets sur 1000 venaient
+  bien de l'adresse de la machine et étaient reconnus comme tels ;
+- *les connexions étaient trop brèves* — écartée par une expérience contrôlée : un émetteur
+  maintenant une connexion vivante et parlant toutes les 200 ms a produit huit paquets dont
+  aucun ne portait de nom, alors que la connexion était ouverte depuis le début.
+
+**La cause réelle : un backend périmé servait le port 8000.** Deux processus avaient survécu
+aux redémarrages et répondaient avec l'ancien code, dont la liste de détails conservés
+n'incluait pas `processus_local`. La clé était donc écrite par l'agent, reçue par l'API,
+puis **jetée à l'ingestion** — sans erreur, sans trace, et de façon parfaitement silencieuse.
+
+Ce qui a permis de le prouver : ingérer un paquet contenant la clé, puis relire ce que la
+base en avait gardé. Réponse : `['ack', 'charge_utile', 'fenetre', 'seq']` — quatre clés, pas
+la sixième attendue. **Le test qui tranche n'est pas celui qu'on croit** : il ne fallait pas
+observer le réseau, mais vérifier ce que la base retient de ce qu'on lui donne.
+
+**Après redémarrage propre du backend : 953 paquets sur 1000 portent un nom de programme**
+(95 %), dans les deux sens de la conversation.
 
 ## 4. Deux défauts trouvés en écrivant cette partie
 
@@ -1344,13 +1356,17 @@ Tant que ce n'est pas mesuré, l'affichage du programme reste une fonctionnalit�
 
 ## 5. Trois questions de défense
 
-**1. Pourquoi cette fonctionnalité est-elle dans l'outil si elle ne marche pas ?**
+**1. Comment saviez-vous que ça ne marchait pas ?**
 
-Parce qu'elle marche au niveau du mécanisme, et que sa limite est mesurable — ce qui reste
-la meilleure position : on sait exactement ce qui est prouvé et ce qui ne l'est pas. La
-présenter comme acquise serait la faute ; la retirer priverait l'outil de la seule
-information qui réponde à « que fait cette machine ? ». Elle est livrée avec sa limite
-écrite, et l'affichage reste correct sans elle.
+Parce que je l'ai mesuré au lieu de le supposer : sur cinq captures réelles, comptage des
+fiches portant un nom de programme — zéro. Deux explications plausibles ont été écrites,
+puis **testées et écartées l'une après l'autre**. La vraie cause était ailleurs, et elle
+n'avait rien à voir avec le réseau : un processus périmé.
+
+**La leçon vaut plus que le correctif** : une fonctionnalité qui ne produit rien sans erreur
+n'a pas forcément son défaut là où on le cherche. Ici, tout le raisonnement portait sur les
+connexions et le cache, alors que la donnée était correcte jusqu'à la porte de la base — et
+jetée à l'intérieur.
 
 **2. Lire la table des connexions du système, n'est-ce pas intrusif ?**
 

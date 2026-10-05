@@ -174,12 +174,47 @@ class TableCachee:
     qu'un programme lancé à l'instant soit nommé presque tout de suite.
     """
 
+    #: Intervalle minimal entre deux relectures forcées. Sans cette borne, un paquet dont le
+    #: port n'est jamais dans la table déclencherait une lecture système à chaque paquet —
+    #: trois mille appels par capture — pour ne rien trouver de plus.
+    INTERVALLE_RELECTURE = 1.0
+
     def __init__(self, validite: float = VALIDITE_SECONDES) -> None:
         self.validite = validite
         self._table: dict[tuple[str, int], dict[str, Any]] = {}
         self._locales: set[str] = set()
         self._construite_a = 0.0
+        self._derniere_relecture = 0.0
         self._verrou = threading.Lock()
+
+    def _relire(self) -> tuple[dict[tuple[str, int], dict[str, Any]], set[str]]:
+        """Lit la table du système et la garde. Appelée avec le verrou tenu ou non."""
+        table = table_processus(connexions_systeme())
+        locales = adresses_locales()
+        with self._verrou:
+            self._table = table
+            self._locales = locales
+            self._construite_a = time.monotonic()
+        return table, locales
+
+    def _relire_si_possible(self) -> tuple[dict[tuple[str, int], dict[str, Any]], set[str]] | None:
+        """Relit la table, mais au plus une fois par seconde.
+
+        **C'est le correctif du défaut mesuré.** Un instantané gardé cinq secondes ignore les
+        connexions ouvertes depuis moins longtemps : sur une capture réelle, 29 ports locaux
+        apparaissaient dans les paquets, 122 dans la table, et **8 seulement étaient communs**.
+        Autrement dit, la plupart des connexions observées étaient déjà oubliées au moment de
+        la lecture.
+
+        Relire à chaque raté serait ruineux ; relire au plus une fois par seconde rattrape
+        une connexion qui vient de s'ouvrir sans coûter un appel système par paquet.
+        """
+        maintenant = time.monotonic()
+        with self._verrou:
+            if maintenant - self._derniere_relecture < self.INTERVALLE_RELECTURE:
+                return None
+            self._derniere_relecture = maintenant
+        return self._relire()
 
     def obtenir(self) -> tuple[dict[tuple[str, int], dict[str, Any]], set[str]]:
         maintenant = time.monotonic()
@@ -205,6 +240,16 @@ class TableCachee:
         """
         table, locales = self.obtenir()
         trouve = processus_du_paquet(fiche, table, locales)
+
+        if trouve is None:
+            # Rien trouvé avec un instantané qui peut avoir quelques secondes : on en prend
+            # un neuf, une seule fois, et au plus une fois par seconde. C'est ce qui rattrape
+            # une connexion ouverte depuis moins longtemps que la validité du cache — le cas
+            # mesuré comme majoritaire.
+            frais = self._relire_si_possible()
+            if frais is not None:
+                trouve = processus_du_paquet(fiche, frais[0], frais[1])
+
         if trouve:
             fiche.setdefault("details", {})["processus_local"] = trouve["nom"]
             fiche["details"]["processus_pid"] = trouve["pid"]
