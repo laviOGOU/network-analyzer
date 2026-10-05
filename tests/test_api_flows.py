@@ -157,6 +157,39 @@ def test_deux_sessions_ne_se_melangent_pas(client):
     assert matin["communications"][0]["session"] == "capture-du-matin"
 
 
+def test_le_filtre_du_journal_est_precis():
+    """Le filtre doit taire une erreur de Windows sans masquer les vraies pannes.
+
+    Un filtre trop large serait plus dangereux que le bruit qu'il supprime : il cacherait
+    une panne réelle au moment précis où on la cherche.
+    """
+    import logging
+    from backend.main import FiltreFermeturesBrutales
+
+    filtre = FiltreFermeturesBrutales()
+
+    def enregistrement(message, erreur=None, *arguments):
+        """Reproduit fidèlement ce qu'asyncio écrit : le type d'erreur est dans exc_info,
+        et le message ne contient que le nom de la fonction de rappel."""
+        return logging.LogRecord(
+            "asyncio", logging.ERROR, __file__, 1, message, arguments,
+            exc_info=(type(erreur), erreur, None) if erreur else None)
+
+    # Celle-là doit être tue : fermeture brutale, pendant le nettoyage de la connexion.
+    assert filtre.filter(enregistrement(
+        "Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)",
+        ConnectionResetError(10054, "Connexion fermée par l'hôte distant"))) is False
+
+    # Les autres doivent passer : c'est ce qui distingue un filtre d'un bandeau.
+    assert filtre.filter(enregistrement(
+        "Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)",
+        ValueError("autre problème"))) is True
+    assert filtre.filter(enregistrement(
+        "Exception in callback Application.__call__", ValueError("vraie panne"))) is True
+    assert filtre.filter(enregistrement(
+        "Une erreur quelconque sans contexte", ConnectionResetError(10054, "ailleurs"))) is True
+
+
 def test_filtre_par_etat(client):
     envoyer(client, communications=[
         communication(),

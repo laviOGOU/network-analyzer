@@ -160,9 +160,50 @@ def afficher_demarrage() -> None:
                     configuration.hote, configuration.port, "voir ci-dessus")
 
 
+class FiltreFermeturesBrutales(logging.Filter):
+    """Tait une erreur de Windows — celle-là, et aucune autre.
+
+    Quand un client ferme brutalement sa connexion (un navigateur qu'on rafraîchit, un
+    script qui s'arrête), la boucle d'événements Windows signale parfois un
+    ConnectionResetError pendant le nettoyage de la connexion — **après** que la réponse a
+    été servie. La requête a réussi ; l'erreur ne concerne que le rangement derrière.
+
+    Elle remplit le journal d'une trace alarmante alors que tout va bien, et un lecteur qui
+    découvre le projet en conclut que l'application casse. On la tait donc.
+
+    Deux conditions doivent être réunies : la fonction d'où vient l'erreur, et son type.
+    Toute autre exception passe et reste visible — un filtre plus large masquerait de
+    vraies pannes, ce qui serait pire que le bruit qu'on supprime.
+
+    Un détail qui a son importance : asyncio annonce « Exception in callback … » sans
+    jamais nommer l'erreur. Le nom de l'exception n'est pas dans le message, il est dans
+    `exc_info`. Un filtre qui chercherait « ConnectionResetError » dans le texte ne
+    filtrerait donc rien du tout — et c'est exactement ce que faisait la première version,
+    ce qu'un test a montré.
+    """
+
+    def filter(self, enregistrement: logging.LogRecord) -> bool:
+        message = enregistrement.getMessage()
+        if "_call_connection_lost" not in message:
+            return True
+
+        erreur = enregistrement.exc_info[1] if enregistrement.exc_info else None
+        if isinstance(erreur, ConnectionResetError):
+            return False
+
+        # Repli : certaines versions d'asyncio placent le nom de l'erreur dans le texte.
+        return "ConnectionResetError" not in f"{message} {enregistrement.args}"
+
+
+def apaiser_le_journal() -> None:
+    """Applique le filtre au journal de la boucle d'événements."""
+    logging.getLogger("asyncio").addFilter(FiltreFermeturesBrutales())
+
+
 if __name__ == "__main__":                          # pragma: no cover
     import uvicorn
 
     afficher_demarrage()
+    apaiser_le_journal()
     uvicorn.run(application, host=configuration.hote, port=configuration.port,
                 log_level="info")
