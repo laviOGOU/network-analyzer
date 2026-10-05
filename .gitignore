@@ -24,6 +24,11 @@ __pycache__/
 build/
 dist/
 
+# --- Fichiers de travail transitoires ----------------------------------------
+# Un message de commit écrit dans le dépôt finit versionné : `git add -A` l'emporte
+# avant le `rm` qui suit le commit. L'écrire hors du dépôt, ou l'ignorer ici.
+.git-commit-msg.txt
+
 # --- Résultats de tests -----------------------------------------------------
 .pytest_cache/
 .coverage
