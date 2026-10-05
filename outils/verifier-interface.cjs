@@ -184,6 +184,25 @@ function verifier(intitule, condition, precision = "") {
     detail.textes.some((t) => /informations techniques/i.test(t))
     && detail.textes.some((t) => /analyse et explication/i.test(t)),
     detail.textes.join(" | ").slice(0, 150));
+  // Deux ouvertures de suite : les intitulés ne doivent pas s'empiler. `rendreDetail` est
+  // appelé à chaque clic, et un intitulé inséré sans contrôle s'ajoute au précédent — la
+  // page se remplirait de titres identiques au fil des consultations.
+  await page.locator("#corps-communications .bouton-detail").first().click();
+  await page.waitForTimeout(800);
+  await page.locator("#corps-communications .bouton-detail").first().click();
+  await page.waitForTimeout(800);
+  const empiles = await page.evaluate(() => {
+    const compter = (texte) => [...document.querySelectorAll(".bloc-intitule")]
+      .filter((n) => new RegExp(texte, "i").test(n.textContent)).length;
+    return { informations: compter("informations techniques"),
+             analyse: compter("analyse et explication"),
+             externe: [...document.querySelectorAll(".explication-titre")]
+               .filter((n) => /contexte externe/i.test(n.textContent)).length };
+  });
+  verifier("ouvrir deux fois le detail n'empile pas les intitules",
+    empiles.informations === 1 && empiles.analyse === 1 && empiles.externe === 1,
+    `informations=${empiles.informations} analyse=${empiles.analyse} externe=${empiles.externe}`);
+
   verifier("le contexte externe est montre, ou dit qu'il est indisponible",
     detail.externe, `bloc externe present : ${detail.externe}`);
   await page.locator("#detail-communication")

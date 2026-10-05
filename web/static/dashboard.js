@@ -664,9 +664,20 @@
     return enveloppe;
   }
 
-  /** Pose un intitulé juste avant un élément, sans toucher au reste de la page. */
+  /**
+   * Pose un intitulé juste avant un élément, **une seule fois**.
+   *
+   * `rendreDetail` est appelé à chaque ouverture du détail, et le panneau n'est pas reconstruit
+   * entre-temps : sans ce contrôle, l'intitulé s'ajoutait au précédent et la page finissait par
+   * empiler des titres identiques. Vérifié en ouvrant le détail deux fois de suite — deux
+   * « Informations techniques » au lieu d'une.
+   */
   function intituler(element, texte) {
     if (!element || !element.parentElement) return;
+    const precedents = element.parentElement.querySelectorAll(".bloc-intitule");
+    for (const existant of precedents) {
+      if (existant.nextElementSibling === element) return;   // déjà en place
+    }
     const titre = document.createElement("h3");
     titre.className = "bloc-intitule";
     titre.textContent = texte;

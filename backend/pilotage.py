@@ -316,7 +316,15 @@ def evenements(file_: queue.Queue, battement: float = 15.0) -> Iterator[str]:
     Un **battement** est émis quand rien n'arrive : sans lui, un intermédiaire réseau
     fermerait une connexion restée silencieuse, et la page cesserait de recevoir les paquets
     sans que personne ne le remarque.
+
+    **La coupure du client est un cas normal, pas une erreur.** Quand un onglet se ferme ou
+    recharge, le serveur continue d'écrire dans un flux que personne ne lit : le navigateur
+    signale alors `ERR_INCOMPLETE_CHUNKED_ENCODING`, qui apparaît comme une erreur alors qu'il
+    ne s'est rien passé d'anormal. On arrête donc proprement dès que l'écriture n'aboutit plus,
+    au lieu de laisser la réponse se rompre.
     """
+    import json
+
     dernier = time.monotonic()
     while True:
         try:
@@ -328,5 +336,11 @@ def evenements(file_: queue.Queue, battement: float = 15.0) -> Iterator[str]:
             continue
 
         dernier = time.monotonic()
-        import json
-        yield f"data: {json.dumps(paquet, ensure_ascii=False)}\n\n"
+        try:
+            yield f"data: {json.dumps(paquet, ensure_ascii=False)}\n\n"
+        except GeneratorExit:
+            # Le navigateur a fermé la connexion : on rend la main sans bruit.
+            raise
+        except Exception as erreur:                      # noqa: BLE001
+            logger.debug("Flux interrompu : %s", erreur)
+            return

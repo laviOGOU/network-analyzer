@@ -1693,3 +1693,67 @@ manquait à cette interface, qui présentait neuf blocs sans dire par où commen
 Parce que quelqu'un qui ouvre l'outil tous les jours n'a pas besoin du guide tous les jours, et
 qu'une fenêtre qu'on ferme mécaniquement cesse d'être lue — y compris le jour où elle dirait
 quelque chose d'important. Le choix est mémorisé, et le bouton *Guide* reste là.
+
+
+---
+
+# Chasse aux anomalies — deux défauts trouvés et corrigés
+
+## Défaut 1 — Les intitulés du détail s'empilaient
+
+**Symptôme** : ouvrir deux fois le détail d'une communication affichait **deux fois**
+« Informations techniques » et deux fois « Analyse et explication ». À la dixième
+consultation, dix titres identiques.
+
+**Cause** : `intituler()` insérait un titre **avant** l'élément à chaque appel de
+`rendreDetail`, sans vérifier qu'il était déjà là. Le panneau n'étant pas reconstruit entre
+deux ouvertures, les titres s'accumulaient.
+
+**Correctif** : l'intitulé n'est posé que s'il n'est pas déjà en place, en vérifiant que
+l'élément précédent est bien celui qu'on veut intituler.
+
+**Comment il a été trouvé** : par déduction, en relisant le code après l'avoir écrit — puis
+**confirmé par un contrôle automatique** qui ouvre le détail deux fois et compte les titres.
+La déduction seule n'aurait pas suffi : c'est le contrôle qui a transformé une hypothèse en
+fait, et c'est lui qui empêchera le défaut de revenir.
+
+## Défaut 2 — Le flux en direct se coupait mal
+
+**Symptôme** : `net::ERR_INCOMPLETE_CHUNKED_ENCODING` dans la console du navigateur, à chaque
+fin de flux.
+
+**Cause** : quand un onglet se ferme ou recharge, le serveur continue d'écrire dans un flux que
+personne ne lit. La réponse se rompt alors au milieu d'un bloc, et le navigateur le signale
+comme une erreur — alors qu'il ne s'est rien passé d'anormal.
+
+**Correctif** : le générateur rend la main proprement dès que l'écriture n'aboutit plus, au
+lieu de laisser la réponse se rompre. Une coupure de client est un cas normal, pas un incident.
+
+## Ce que cette chasse n'a pas couvert
+
+Elle a été **ciblée** sur ce que les derniers changements pouvaient casser, et sur ce que je
+savais fragile. Elle n'est pas un audit complet. En particulier :
+
+- **L'affichage responsive n'a pas été audité** aux différentes tailles d'écran. C'est une
+  exigence du projet, et elle n'est pas vérifiée à ce stade — les nouveaux blocs (barre de
+  capture, guide, vues) n'ont été regardés qu'à une taille.
+- **Le thème sombre** n'a pas été vérifié avec les nouveaux composants.
+- **Les 11 tailles d'écran** que le standard du projet impose n'ont pas été passées.
+
+Ce sont les prochaines vérifications, et elles demandent un outil de mesure, pas un coup d'œil.
+
+## Deux questions de défense
+
+**1. Pourquoi ces deux défauts n'avaient-ils pas été vus plus tôt ?**
+
+Parce qu'aucun des deux ne se produit à la première utilisation. Les intitulés ne s'empilent
+qu'à la **deuxième** ouverture du détail, et la coupure du flux n'apparaît qu'à la **fermeture**
+d'un onglet. Un contrôle qui n'essaie chaque chose qu'une fois ne les voit jamais — c'est
+pourquoi le contrôle ajouté ouvre le détail **deux fois de suite**.
+
+**2. Le contrôle a-t-il été écrit après le défaut, ou avant ?**
+
+**Avant** : l'hypothèse vient de la relecture du code, le contrôle l'a confirmée. C'est la
+seule manière honnête de présenter la chose — je ne vais pas prétendre avoir écrit un contrôle
+qui aurait attrapé le défaut tout seul. Ce qui compte est qu'il soit là maintenant, et qu'il
+échouera si le défaut revient.

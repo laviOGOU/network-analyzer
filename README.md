@@ -551,7 +551,7 @@ from backend.explain import explications     # toutes les explications applicabl
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**375 tests** · **55 vérifications navigateur**, dont :
+**375 tests** · **56 vérifications navigateur**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole
@@ -622,6 +622,9 @@ ce qui n'est pas fait n'est pas simulé.**
   Une connexion ouverte et fermée entre deux relevés ne sera pas nommée.
 - **Un tiers des connexions n'a pas de processus connu** sans droits administrateur. C'est
   une limite de Windows, pas un défaut de l'outil.
+- **L'affichage n'a pas été audité aux différentes tailles d'écran** avec les nouveaux blocs
+  (barre de capture, guide, vues, détail). Une seule taille a été regardée, et le thème sombre
+  n'a pas été vérifié avec ces composants. C'est la prochaine vérification à mener.
 - **Le graphique de débit n'a pas d'axe des temps.** Chaque barre porte son décalage en
   secondes au survol, mais un pic ne peut pas être daté sans survoler. Suffisant pour repérer
   une accélération, insuffisant pour la situer.
