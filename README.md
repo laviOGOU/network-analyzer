@@ -398,6 +398,17 @@ sur des adresses IPv6 que personne ne lit.
 l'adresse est le fait vérifiable. Une adresse partagée par plusieurs noms reçoit le plus
 récemment observé, et l'outil le dit « d'après le DNS ».
 
+## À l'arrivée : le guide
+
+À la première visite, une fenêtre d'accueil explique ce que fait l'outil puis donne **six
+étapes** pour s'en servir (choisir l'interface, démarrer, Pause contre Arrêter, parcourir les
+vues, demander une explication, filtrer). Elle se referme pour de bon si on le demande, et le
+bouton **Guide** de l'en-tête la rouvre à tout moment.
+
+Elle énonce aussi les **limites** : pas de déchiffrement, aucune donnée de contenu conservée,
+capture pilotable seulement depuis cette machine, et « non extrait » écrit partout où
+l'analyseur n'a pas su lire.
+
 ## Cinq vues nommées, celles du sujet
 
 La page porte les vues du §9 : **Traffic**, **Connections**, **Protocols**, **Alerts** et
@@ -540,7 +551,7 @@ from backend.explain import explications     # toutes les explications applicabl
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**375 tests** · **50 vérifications navigateur**, dont :
+**375 tests** · **55 vérifications navigateur**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole

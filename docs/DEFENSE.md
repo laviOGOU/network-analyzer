@@ -1635,3 +1635,61 @@ Parce qu'une communication peut porter **plusieurs** explications, chacune avec 
 confiance et sa source (règle écrite ou reformulation par IA). Les fondre en un texte unique
 ferait perdre cette distinction — or c'est précisément ce que le §4 demande de préserver :
 savoir ce qui est observé et ce qui est interprété.
+
+
+---
+
+# Message d'accueil et guide d'utilisation
+
+## Ce qui a été ajouté
+
+Une **boîte de dialogue d'accueil** s'affiche à la première visite : ce que fait l'outil, puis
+**six étapes** pour s'en servir — choisir l'interface, démarrer, comprendre Pause et Arrêter,
+parcourir les vues, demander une explication, filtrer l'affichage. Deux boutons :
+*Commencer l'analyse* et *Ne plus afficher au démarrage*.
+
+Un bouton **Guide** dans l'en-tête la rouvre à tout moment.
+
+## Pourquoi ces choix
+
+**Le guide reste accessible.** Un guide qu'on ne peut voir qu'une fois ne sert qu'une fois —
+et pendant une démonstration, on veut pouvoir le remontrer sans effacer quoi que ce soit.
+
+**Il est caché par défaut dans le HTML** et révélé par le JavaScript. Si le script échoue, la
+page reste utilisable : un voile plein écran qui ne se referme pas serait pire que pas de guide
+du tout.
+
+**Trois précautions d'accessibilité**, parce qu'une fenêtre modale mal faite enferme celui qui
+navigue au clavier : le focus **entre** dans la boîte à l'ouverture, **revient** d'où il venait
+à la fermeture, et Échap ferme. Le fond ne défile pas non plus derrière — sinon on croit que le
+guide *est* la page.
+
+**Le stockage du choix ne bloque pas.** En navigation privée, `localStorage` peut être refusé :
+le guide s'affichera de nouveau, et rien d'autre ne casse.
+
+**La boîte défile en interne**, elle ne dépasse jamais la fenêtre : sur un téléphone, un guide
+qu'on ne peut pas lire en entier ne sert à rien.
+
+## Ce que le guide dit aussi, et qui compte
+
+Le dernier paragraphe énonce les **limites** : l'outil n'obéit qu'aux ordres venus de cette
+machine, il ne déchiffre aucune session, il ne conserve aucun contenu — seulement des
+métadonnées — et ce qu'il n'a pas su extraire est écrit « non extrait » plutôt que comblé par
+une valeur inventée.
+
+Un guide qui ne présenterait que les capacités laisserait découvrir les limites au pire moment,
+devant quelqu'un qui pose la question.
+
+## Deux questions de défense
+
+**1. Pourquoi une fenêtre plutôt qu'un encart en haut de page ?**
+
+Parce qu'un encart en haut de page est sauté : l'œil va au tableau, qui est plus bas et plus
+intéressant. Une fenêtre impose un premier choix — et un premier choix est exactement ce qui
+manquait à cette interface, qui présentait neuf blocs sans dire par où commencer.
+
+**2. Pourquoi proposer « Ne plus afficher » ?**
+
+Parce que quelqu'un qui ouvre l'outil tous les jours n'a pas besoin du guide tous les jours, et
+qu'une fenêtre qu'on ferme mécaniquement cesse d'être lue — y compris le jour où elle dirait
+quelque chose d'important. Le choix est mémorisé, et le bouton *Guide* reste là.

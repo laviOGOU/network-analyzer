@@ -61,6 +61,37 @@ function verifier(intitule, condition, precision = "") {
   await page.waitForTimeout(400);
 
   const lignes = await page.locator("#corps-communications tr").count();
+  // L'accueil. Il doit s'afficher a la premiere visite, se fermer, ET POUVOIR ETRE ROUVERT :
+  // un guide qu'on ne peut voir qu'une fois ne sert qu'une fois. Les controles suivants
+  // supposent qu'il est ferme — sinon il recouvre la page et Playwright refuse de cliquer.
+  const accueil = await page.evaluate(() => {
+    const boite = document.getElementById("accueil");
+    return {
+      present: !!boite,
+      ouvert: boite ? !boite.hidden : false,
+      etapes: document.querySelectorAll("#accueil .accueil__etapes li").length,
+      titre: (document.getElementById("accueil-titre")?.textContent || "").trim(),
+      bouton: !!document.getElementById("ouvrir-guide"),
+    };
+  });
+  verifier("le guide d'accueil s'affiche a la premiere visite",
+    accueil.present && accueil.ouvert,
+    `ouvert=${accueil.ouvert} · ${accueil.etapes} etape(s) · « ${accueil.titre} »`);
+  verifier("le guide decrit la demarche en plusieurs etapes",
+    accueil.etapes >= 5 && accueil.bouton,
+    `${accueil.etapes} etapes · bouton de reouverture : ${accueil.bouton}`);
+
+  await page.keyboard.press("Escape");
+  await page.waitForSelector("#accueil", { state: "hidden", timeout: 5000 });
+  verifier("Echap referme le guide", true);
+
+  await page.locator("#ouvrir-guide").click();
+  await page.waitForSelector("#accueil:not([hidden])", { timeout: 5000 });
+  verifier("le guide peut etre rouvert par le bouton Guide", true);
+  await page.locator("#accueil-commencer").click();
+  await page.waitForSelector("#accueil", { state: "hidden", timeout: 5000 });
+  verifier("« Commencer » referme le guide", true);
+
   // Les vues nommees : au depart, une seule est affichee, et les quatre du sujet existent.
   const vues = await page.evaluate(() => {
     const onglets = [...document.querySelectorAll(".vue-onglet")].map((o) => o.dataset.cible);

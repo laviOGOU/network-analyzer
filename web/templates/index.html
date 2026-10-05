@@ -36,6 +36,7 @@
     </div>
   </div>
   <div class="entete__actions">
+    <button type="button" class="bouton bouton--fantome" id="ouvrir-guide">Guide</button>
     <span class="etiquette" title="Environnement d'exécution">{{ environnement }}</span>
     <span class="etat-connexion" id="etat-connexion" data-etat="attente" role="status">
       <span class="etat-connexion__point" aria-hidden="true"></span>
@@ -148,6 +149,79 @@
 </details>
 
 <main>
+  {# Message d'accueil et guide. **Caché par défaut dans le HTML** : si le JavaScript échoue,
+     la page reste utilisable — un voile plein écran qui ne se referme pas serait pire que
+     pas de guide du tout. #}
+  <div class="accueil" id="accueil" hidden>
+    <div class="accueil__voile" data-fermer></div>
+    <div class="accueil__boite" role="dialog" aria-modal="true" aria-labelledby="accueil-titre"
+         aria-describedby="accueil-intro">
+      <div class="accueil__entete">
+        <h2 id="accueil-titre">Bienvenue dans l'analyseur de paquets</h2>
+        <button type="button" class="bouton bouton--fantome" id="accueil-fermer"
+                aria-label="Fermer le guide">Fermer</button>
+      </div>
+
+      <p id="accueil-intro" class="accueil__intro">
+        Cet outil observe le trafic qui passe par cette machine, puis vous l'explique —
+        <strong>capturer</strong>, <strong>analyser</strong>, <strong>comprendre</strong>,
+        <strong>expliquer</strong>. Il ne déchiffre rien : ce qui circule en HTTPS reste
+        illisible, et l'outil vous dit pourquoi plutôt que de le laisser croire à un oubli.
+      </p>
+
+      <ol class="accueil__etapes">
+        <li>
+          <strong>Choisissez une interface</strong> dans la barre « Capture en direct » —
+          Wi-Fi pour le réseau sans fil, Ethernet pour le câble. La liste est celle des
+          interfaces réellement présentes sur cette machine.
+        </li>
+        <li>
+          <strong>Démarrez la capture.</strong> Les paquets arrivent et défilent.
+          <em>Pause</em> fige l'affichage <strong>sans arrêter la capture</strong> : vous
+          pouvez lire un paquet sans perdre le trafic qui continue.
+        </li>
+        <li>
+          <strong>Arrêtez</strong> quand vous avez assez observé. Ce qui a été capturé reste
+          consultable dans l'historique — rien n'est perdu.
+        </li>
+        <li>
+          <strong>Parcourez les vues</strong> : <em>Traffic</em> pour la vue d'ensemble,
+          <em>Connections</em> pour les communications, <em>Protocols</em> pour le rôle de
+          chaque protocole, <em>Alerts</em> pour ce qui mérite l'attention,
+          <em>Paquets</em> pour le détail technique.
+        </li>
+        <li>
+          <strong>Demandez une explication.</strong> Dans <em>Connections</em>, le bouton
+          « Expliquer » d'une ligne montre les informations techniques, l'explication en
+          français, et ce que chaque élément signifie. Les faits observés et les
+          interprétations y sont toujours séparés.
+        </li>
+        <li>
+          <strong>Filtrez ce que vous regardez</strong> avec la barre de filtre —
+          <code>proto:tcp port:443</code> — ou choisissez un profil préparé. Ce filtre ne
+          change pas ce qui est capturé : il ne fait que trier l'affichage.
+        </li>
+      </ol>
+
+      <p class="accueil__note">
+        Un mot sur ce que l'outil ne peut pas faire : il n'obéit qu'aux ordres venus de
+        cette machine, il ne déchiffre aucune session, et il ne conserve aucun contenu —
+        seulement des métadonnées. Ce qu'il n'a pas pu extraire est écrit « non extrait »
+        plutôt que comblé par une valeur inventée.
+      </p>
+
+      <div class="accueil__actions">
+        <button type="button" class="bouton bouton--principal" id="accueil-commencer">
+          Commencer l'analyse
+        </button>
+        <label class="accueil__case">
+          <input type="checkbox" id="accueil-ne-plus">
+          Ne plus afficher au démarrage
+        </label>
+      </div>
+    </div>
+  </div>
+
   <section data-vue-toujours="1" aria-labelledby="titre-capture" class="section-capture">
     <div class="titre-section--ligne">
       <h2 id="titre-capture" class="titre-section">Capture en direct</h2>

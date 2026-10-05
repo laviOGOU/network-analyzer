@@ -2000,3 +2000,73 @@ function signalerCriteresEcartes(champs) {
 
   choisir(location.hash.slice(1) || DEFAUT, true);
 })();
+
+/* ================================================== accueil et guide d'utilisation
+
+   Le guide s'affiche a la premiere visite, et **se referme pour de bon** si on le demande.
+   Il reste accessible a tout moment par le bouton « Guide » de l'entete : un guide qu'on ne
+   peut voir qu'une fois ne sert qu'une fois.
+
+   Il est **cache par defaut dans le HTML** et revele par ce bloc : si le JavaScript echoue,
+   la page reste utilisable. Un voile plein ecran qui ne se referme pas serait pire que pas de
+   guide du tout.
+
+   Trois precautions d'accessibilite, parce qu'une fenetre modale mal faite enferme celui qui
+   navigue au clavier : le focus entre dans la boite a l'ouverture, revient d'ou il venait a
+   la fermeture, et Echap ferme. */
+(function () {
+  "use strict";
+
+  const accueil = document.getElementById("accueil");
+  const ouvrir = document.getElementById("ouvrir-guide");
+  const fermer = document.getElementById("accueil-fermer");
+  const commencer = document.getElementById("accueil-commencer");
+  const nePlus = document.getElementById("accueil-ne-plus");
+  if (!accueil || !fermer) return;
+
+  const CLE = "analyseur-guide-vu";
+  let origine = null;
+
+  function dejaVu() {
+    try {
+      return localStorage.getItem(CLE) === "non";
+    } catch (erreur) {
+      // Navigation privee ou stockage refuse : on affiche le guide, c'est le comportement
+      // le plus utile. Ne pas pouvoir retenir un choix ne doit pas priver du guide.
+      return false;
+    }
+  }
+
+  function retenir(valeur) {
+    try {
+      localStorage.setItem(CLE, valeur);
+    } catch (erreur) { /* sans effet : le guide se reaffichera, rien de plus */ }
+  }
+
+  function montrer() {
+    origine = document.activeElement;
+    accueil.hidden = false;
+    document.body.classList.add("guide-ouvert");
+    if (commencer) commencer.focus();
+  }
+
+  function cacher() {
+    if (nePlus && nePlus.checked) retenir("non");
+    accueil.hidden = true;
+    document.body.classList.remove("guide-ouvert");
+    // Le focus revient d'ou il venait : sans cela, un lecteur au clavier repart du debut de
+    // la page et doit la parcourir entiere pour retrouver sa place.
+    if (origine && origine.focus) origine.focus();
+  }
+
+  fermer.addEventListener("click", cacher);
+  if (commencer) commencer.addEventListener("click", cacher);
+  accueil.querySelectorAll("[data-fermer]").forEach((zone) => zone.addEventListener("click", cacher));
+  if (ouvrir) ouvrir.addEventListener("click", montrer);
+
+  document.addEventListener("keydown", (evenement) => {
+    if (evenement.key === "Escape" && !accueil.hidden) cacher();
+  });
+
+  if (!dejaVu()) montrer();
+})();
