@@ -188,6 +188,55 @@
     </p>
   </section>
 
+  <section aria-labelledby="titre-statistiques">
+    <div class="titre-section--ligne">
+      <h2 id="titre-statistiques" class="titre-section">Répartitions et débit</h2>
+    </div>
+
+    <div class="grille-statistiques">
+      <article class="bloc-statistique">
+        <h3 class="couches-titre">Protocoles</h3>
+        <p class="aide">
+          Le pourcentage porte toujours sur le nombre de paquets examinés : « 62 % de TCP »
+          ne veut rien dire si l'on ignore ce que font les 38 % restants.
+        </p>
+        <div id="stats-hierarchie"></div>
+      </article>
+
+      <article class="bloc-statistique">
+        <h3 class="couches-titre">Machines les plus actives</h3>
+        <p class="aide">
+          Émis et reçus sont distingués : un serveur qui répond beaucoup et une machine qui
+          interroge beaucoup n'ont pas le même profil.
+        </p>
+        <div id="stats-extremites"></div>
+      </article>
+
+      <article class="bloc-statistique">
+        <h3 class="couches-titre">Débit dans le temps</h3>
+        <p class="aide">
+          Les intervalles partent du premier paquet vu, jamais de l'horloge de la machine :
+          un fichier rejoué produit le même graphique que la capture d'origine.
+        </p>
+        <div id="stats-debit" class="debit"></div>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="titre-anomalies">
+    <div class="titre-section--ligne">
+      <h2 id="titre-anomalies" class="titre-section">Expert Info</h2>
+      <p class="aide" id="anomalies-resume"></p>
+    </div>
+    <p class="aide">
+      Une anomalie est un <strong>fait mesuré</strong>, jamais une conclusion : une
+      retransmission signale presque toujours un réseau lent, pas une attaque. Les critères
+      qui l'ont déclenchée sont écrits avec elle, pour que vous puissiez la vérifier
+      vous-même. Aucune anomalie, seule, ne produit une alerte.
+    </p>
+    <div id="anomalies-liste"></div>
+  </section>
+
   <section aria-labelledby="titre-communications">
     <div class="titre-section--ligne">
       <h2 id="titre-communications" class="titre-section">Connections</h2>

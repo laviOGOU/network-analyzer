@@ -35,6 +35,7 @@ from backend import export as mod_export
 from backend import filtres as mod_filtres
 from backend import noms as mod_noms
 from backend import recit as mod_recit
+from backend import statistiques as mod_statistiques
 
 #: L'analyse des anomalies vit avec l'agent, qui voit passer les paquets. Le backend ne doit
 #: pas dépendre de ce dossier : un déploiement peut les séparer — et c'est le cas prévu par
@@ -297,6 +298,21 @@ def lister_sessions(stockage: Annotated[Stockage, Depends(obtenir_stockage)]) ->
     """
     sessions = stockage.sessions()
     return {"sessions": sessions, "total": len(sessions)}
+
+
+@router.get("/statistiques", summary="Répartitions, extrémités et débit")
+def statistiques_detaillees(
+    stockage: Annotated[Stockage, Depends(obtenir_stockage)],
+    limite: Annotated[int, Query(ge=1, le=3000, description="Paquets relus")] = 3000,
+) -> dict[str, Any]:
+    """Répartition par protocole en pourcentages, classement des machines, débit dans le temps.
+
+    Les pourcentages portent toujours leur **total** : « 62 % de TCP » ne veut rien dire si
+    l'on ignore ce que font les 38 % restants. Et les paquets d'analyse partielle sont
+    comptés à part, jamais fondus dans un protocole connu — leur classer une famille serait
+    inventer ce que le parseur n'a pas su lire.
+    """
+    return mod_statistiques.ensemble(stockage.paquets(limite=limite))
 
 
 @router.get("/anomalies", summary="Expert Info — ce qui sort de l'ordinaire")

@@ -346,6 +346,30 @@ function verifier(intitule, condition, precision = "") {
     verifier("le bouton Raconter est present sur les communications", false, "aucun bouton");
   }
 
+  // Les repartitions et l'Expert Info se chargent a part du cycle principal : on attend que
+  // la premiere ligne apparaisse au lieu de mesurer un delai fixe.
+  await page.waitForSelector("#stats-hierarchie .ligne-part", { timeout: 30000 }).catch(() => {});
+  const stats = await page.evaluate(() => ({
+    protocoles: document.querySelectorAll("#stats-hierarchie .ligne-part").length,
+    pourcentages: (document.getElementById("stats-hierarchie").textContent.match(/%/g) || []).length,
+    extremites: document.querySelectorAll("#stats-extremites .ligne-part").length,
+    paliers: document.querySelectorAll("#stats-debit .debit-palier").length,
+    anomalies: document.querySelectorAll("#anomalies-liste .anomalie").length,
+    resume: (document.getElementById("anomalies-resume").textContent || "").slice(0, 60),
+  }));
+  verifier("la repartition par protocole affiche des pourcentages",
+           stats.protocoles > 0 && stats.pourcentages > 0,
+           `${stats.protocoles} protocole(s), ${stats.pourcentages} pourcentage(s)`);
+  verifier("les machines les plus actives sont classees",
+           stats.extremites > 0, `${stats.extremites} machine(s)`);
+  verifier("le debit dans le temps est trace",
+           stats.paliers > 0, `${stats.paliers} intervalle(s)`);
+  // Une simple recherche de texte : une expression régulière avec des parenthèses échappées
+  // s'écrit mal et échoue pour de mauvaises raisons — ce qui est arrivé ici.
+  verifier("l'Expert Info annonce ce qu'il a examine",
+           stats.resume.includes("examiné") && stats.resume.includes("sur 800"),
+           `resume="${stats.resume}"`);
+
   verifier("aucune erreur JavaScript", erreursReelles.length === 0,
     erreursReelles.slice(0, 3).join(" | "));
 

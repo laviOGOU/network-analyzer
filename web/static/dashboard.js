@@ -1259,3 +1259,196 @@ function signalerCriteresEcartes(champs) {
   document.addEventListener("filtre-change", mettreAJour);
   mettreAJour();
 })();
+
+/* ============================================================ répartitions et Expert Info
+
+   Ces deux ensembles sont chargés à part du cycle principal du tableau de bord : ils
+   demandent de relire les paquets — trois mille d'un coup — ce qu'on ne fait pas toutes les
+   trois secondes. Un intervalle plus long suffit, et personne ne s'en aperçoit.
+
+   Le rendu n'emploie que `textContent` : ce qui s'affiche vient du réseau, et une chaîne
+   réseau insérée comme HTML s'exécuterait. */
+(function () {
+  "use strict";
+
+  const hierarchie = document.getElementById("stats-hierarchie");
+  const extremites = document.getElementById("stats-extremites");
+  const graphique = document.getElementById("stats-debit");
+  const listeAnomalies = document.getElementById("anomalies-liste");
+  const resumeAnomalies = document.getElementById("anomalies-resume");
+  if (!hierarchie || !extremites || !graphique || !listeAnomalies) return;
+
+  const octets = (valeur) => {
+    const nombre = Number(valeur) || 0;
+    if (nombre < 1000) return `${nombre} o`;
+    if (nombre < 1000000) return `${(nombre / 1000).toFixed(1).replace(".", ",")} ko`;
+    return `${(nombre / 1000000).toFixed(1).replace(".", ",")} Mo`;
+  };
+
+  /** Une ligne : le nom, une barre proportionnelle, et le chiffre écrit.
+   *  Le chiffre est là parce qu'une barre ne se lit pas au lecteur d'écran, et qu'une
+   *  longueur relative ne dit pas une valeur. */
+  function ligne(nom, part, maximum, chiffre) {
+    const rangee = document.createElement("div");
+    rangee.className = "ligne-part";
+
+    const etiquette = document.createElement("span");
+    etiquette.className = "ligne-part-nom";
+    etiquette.textContent = nom;
+
+    const rail = document.createElement("div");
+    rail.className = "barre";
+    const remplissage = document.createElement("div");
+    remplissage.className = "barre-part";
+    remplissage.style.width = maximum > 0
+      ? `${Math.max(1, Math.round(100 * part / maximum))}%` : "0%";
+    rail.appendChild(remplissage);
+
+    const valeur = document.createElement("span");
+    valeur.className = "ligne-part-chiffre";
+    valeur.textContent = chiffre;
+
+    rangee.appendChild(etiquette);
+    rangee.appendChild(rail);
+    rangee.appendChild(valeur);
+    return rangee;
+  }
+
+  function rendreHierarchie(donnees) {
+    hierarchie.textContent = "";
+    const total = donnees.total || 0;
+    if (!total) {
+      const vide = document.createElement("p");
+      vide.className = "aide";
+      vide.textContent = "Aucun paquet dans la fenêtre analysée.";
+      hierarchie.appendChild(vide);
+      return;
+    }
+    const maximum = Math.max(...donnees.protocoles.map((p) => p.pourcent), 1);
+    donnees.protocoles.forEach((part) => {
+      hierarchie.appendChild(ligne(part.nom, part.pourcent, maximum,
+        `${part.pourcent.toString().replace(".", ",")} % · ${part.paquets}`));
+    });
+    const totalLigne = document.createElement("p");
+    totalLigne.className = "aide";
+    totalLigne.textContent = `Sur ${total} paquet(s) examiné(s).`;
+    hierarchie.appendChild(totalLigne);
+  }
+
+  function rendreExtremites(donnees) {
+    extremites.textContent = "";
+    const liste = donnees.extremites || [];
+    if (!liste.length) {
+      const vide = document.createElement("p");
+      vide.className = "aide";
+      vide.textContent = "Aucune machine identifiable dans la fenêtre analysée.";
+      extremites.appendChild(vide);
+      return;
+    }
+    const maximum = Math.max(...liste.map((f) => f.total), 1);
+    liste.slice(0, 8).forEach((fiche) => {
+      extremites.appendChild(ligne(fiche.adresse, fiche.total, maximum,
+        `${fiche.total} ⇅ · ${octets(fiche.octets_total)}`));
+    });
+  }
+
+  function rendreDebit(donnees) {
+    graphique.textContent = "";
+    const points = donnees.points || [];
+    if (!points.length) {
+      const vide = document.createElement("p");
+      vide.className = "aide";
+      vide.textContent = "Aucun paquet daté : pas de débit à tracer.";
+      graphique.appendChild(vide);
+      return;
+    }
+    const maximum = donnees.maximum_octets || 1;
+    points.forEach((point) => {
+      const palier = document.createElement("div");
+      palier.className = "debit-palier";
+      palier.style.height = `${Math.max(2, Math.round(100 * point.octets / maximum))}%`;
+      // L'information est aussi dans l'attribut `title` : une barre sans chiffre ne se lit
+      // pas autrement qu'à l'œil.
+      palier.title = `+${String(point.offset_s).replace(".", ",")} s · `
+        + `${point.paquets} paquet(s) · ${octets(point.octets)}`;
+      graphique.appendChild(palier);
+    });
+    const legende = document.createElement("p");
+    legende.className = "aide";
+    legende.textContent = `${points.length} intervalle(s) de `
+      + `${String(donnees.seau_secondes).replace(".", ",")} s · pic à `
+      + `${octets(maximum)} par intervalle. Survolez une barre pour le détail.`;
+    graphique.parentElement.appendChild(legende);
+  }
+
+  function rendreAnomalies(donnees) {
+    listeAnomalies.textContent = "";
+    if (donnees.disponible === false) {
+      resumeAnomalies.textContent = "";
+      const indisponible = document.createElement("p");
+      indisponible.className = "aide";
+      indisponible.textContent = donnees.note || "Analyse indisponible dans ce déploiement.";
+      listeAnomalies.appendChild(indisponible);
+      return;
+    }
+
+    const anomalies = donnees.anomalies || [];
+    resumeAnomalies.textContent = `${donnees.total} anomalie(s) observée(s) sur `
+      + `${donnees.paquets_examines} paquet(s) examiné(s)`;
+
+    if (!anomalies.length) {
+      // Une liste vide sans ce chiffre laisserait croire que rien n'a été analysé.
+      const vide = document.createElement("p");
+      vide.className = "aide";
+      vide.textContent = donnees.paquets_examines
+        ? "Aucune anomalie dans les paquets examinés."
+        : "Aucun paquet à examiner pour l'instant.";
+      listeAnomalies.appendChild(vide);
+      return;
+    }
+
+    anomalies.slice(0, 12).forEach((anomalie) => {
+      const bloc = document.createElement("div");
+      bloc.className = "anomalie";
+
+      const titre = document.createElement("div");
+      titre.className = "anomalie-titre";
+      titre.textContent = `${anomalie.anomalie} — `
+        + `${anomalie.sens || anomalie.conversation || ""}`;
+      bloc.appendChild(titre);
+
+      const criteres = document.createElement("ul");
+      criteres.className = "anomalie-criteres";
+      (anomalie.criteres || []).forEach((critere) => {
+        const item = document.createElement("li");
+        item.textContent = critere;
+        criteres.appendChild(item);
+      });
+      bloc.appendChild(criteres);
+      listeAnomalies.appendChild(bloc);
+    });
+  }
+
+  async function charger() {
+    try {
+      const [repartition, expert] = await Promise.all([
+        fetch("/api/v1/statistiques?limite=3000", { headers: { Accept: "application/json" } }),
+        fetch("/api/v1/anomalies?limite=800", { headers: { Accept: "application/json" } }),
+      ]);
+      if (repartition.ok) {
+        const donnees = await repartition.json();
+        rendreHierarchie(donnees.hierarchie || {});
+        rendreExtremites(donnees.extremites || {});
+        rendreDebit(donnees.debit || {});
+      }
+      if (expert.ok) rendreAnomalies(await expert.json());
+    } catch (erreur) {
+      // Un tableau de bord ne doit pas se vider parce qu'une vue secondaire a échoué : les
+      // autres sections continuent de fonctionner.
+      resumeAnomalies.textContent = "Statistiques indisponibles pour l'instant.";
+    }
+  }
+
+  charger();
+  setInterval(charger, 15000);
+})();

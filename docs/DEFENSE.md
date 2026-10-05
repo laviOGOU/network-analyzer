@@ -1199,3 +1199,90 @@ pas défendre ligne par ligne serait un gadget.
   les données réelles portent `SYN`, `ACK`, `RST`. Les tests échouaient, pas le code — mais
   le temps perdu était le même. La forme des données se relève sur une réponse réelle, elle
   ne se devine pas.
+
+
+---
+
+# Lot C — Statistiques et affichage (fin du lot)
+
+## 1. Ce qui a été construit
+
+**`backend/statistiques.py`** — trois vues calculées sur les paquets :
+
+- la **répartition par protocole**, en comptes et en pourcentages ;
+- les **machines les plus actives**, avec émis et reçus **distingués** ;
+- le **débit dans le temps**, par intervalles réguliers.
+
+**`GET /api/v1/statistiques`** les sert toutes les trois.
+
+**L'affichage** : une section « Répartitions et débit » et une section « Expert Info », avec
+pour chacune les barres, les chiffres écrits et les critères de chaque anomalie.
+
+## 2. Pourquoi ces choix
+
+**Le calcul est dans le backend, pas dans le stockage.** Les mêmes chiffres doivent sortir
+du stockage en mémoire et de PostgreSQL. Écrire le calcul deux fois, c'est garantir qu'il
+divergera : un pourcentage corrigé d'un côté, oublié de l'autre, et deux tableaux de bord
+qui ne disent pas la même chose sans que personne ne sache lequel croire.
+
+**Les pourcentages retombent sur 100.** Le reste de la division est absorbé par la part la
+plus grande, jamais réparti au hasard. Un lecteur qui additionne une colonne et trouve 99 ou
+101 cesse de croire au tableau — et il a raison. Un test le vérifie sur six répartitions
+différentes, y compris celles qui tombent mal.
+
+**Les paquets d'analyse partielle sont comptés à part, jamais classés.** Leur attribuer un
+protocole serait inventer ce que le parseur n'a pas su lire. Un chiffre faux est plus
+difficile à repérer qu'une ligne manquante.
+
+**Émis et reçus sont distingués dans le classement des machines.** Un classement sur le seul
+volume total confondrait un serveur qui répond beaucoup et une machine qui interroge
+beaucoup — or c'est précisément la distinction qui intéresse quand on cherche ce qui parle.
+
+**Des barres en CSS, pas une bibliothèque de graphiques.** La même information, le chiffre
+écrit à côté (donc lisible par un lecteur d'écran, ce qu'une barre n'est pas), et pas une
+dépendance de plus à charger et à maintenir. Le survol d'une barre de débit donne le détail
+de l'intervalle.
+
+**Ces deux vues se chargent à part du cycle principal.** Elles demandent de relire trois
+mille paquets : les rafraîchir toutes les trois secondes serait un gaspillage invisible, et
+c'est exactement ce qui fait qu'un tableau de bord rame sans qu'on sache pourquoi.
+
+## 3. Trois questions de défense
+
+**1. Pourquoi ne pas utiliser Chart.js, comme le suggérait l'énoncé ?**
+
+Parce que trois barres et un histogramme ne justifient pas une bibliothèque de plusieurs
+centaines de kilo-octets, une dépendance de plus à mettre à jour et une source d'échec de
+plus au chargement. Surtout : une barre dessinée en CSS porte **le chiffre écrit à côté**,
+donc elle est lisible par un lecteur d'écran — ce qu'un graphique en toile ne permet pas
+sans travail supplémentaire. Si le besoin d'un vrai graphique se présente un jour (courbes,
+comparaison de sessions), la décision se réexaminera.
+
+**2. Vos statistiques portent sur quoi exactement ?**
+
+Sur les paquets conservés dans la fenêtre relue, et le total est **toujours** affiché. Une
+répartition sans son total est un chiffre qui ne veut rien dire : « 62 % de TCP » ne dit pas
+si les 38 % restants sont de l'UDP, de l'ARP, ou des paquets non analysés. Les paquets
+d'analyse partielle sont d'ailleurs comptés comme une famille à part, jamais fondus dans un
+protocole connu.
+
+**3. Le classement des machines est-il un indicateur de menace ?**
+
+Non, et l'interface ne le présente pas comme tel. Une machine qui émet beaucoup est une
+machine qui parle beaucoup — un serveur de mise à jour, un service de sauvegarde, ou un
+téléphone qui se synchronise. Le classement sert à **savoir où regarder**, pas à désigner un
+coupable. Y voir une menace demanderait d'autres indices, et c'est le rôle des détections.
+
+## 4. Ce qui a été trouvé ici
+
+Mon outil de vérification cherchait le texte « paquet(s) examiné(s) » avec une expression
+régulière dont les parenthèses étaient doublement échappées : elle cherchait des barres
+obliques littérales. **L'affichage était juste, la vérification était fausse.** Une recherche
+de texte simple fait le même travail sans piège — et un contrôle qui échoue pour une mauvaise
+raison coûte plus cher qu'il ne rapporte, puisqu'il apprend à ignorer les échecs.
+
+## 5. Ce qui reste imparfait
+
+Le graphique de débit n'affiche pas d'axe des temps : chaque barre porte son décalage en
+secondes au survol, mais l'œil ne peut pas situer un pic dans le temps sans survoler. C'est
+suffisant pour repérer une accélération, insuffisant pour la dater — et c'est noté comme tel.

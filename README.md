@@ -278,6 +278,20 @@ connexions abandonnées.
 n'interroge que des adresses publiques — jamais 192.168.x, 10.x ou fe80::, qu'aucun service
 tiers ne peut renseigner et qui décriraient votre réseau local à un tiers.
 
+## Répartitions, machines actives, débit
+
+`GET /api/v1/statistiques` rend trois vues calculées sur les paquets relus :
+
+- la **répartition par protocole**, en comptes **et** en pourcentages — le total est toujours
+  affiché, et les paquets d'analyse partielle comptés comme une famille à part ;
+- les **machines les plus actives**, émis et reçus **distingués** : un serveur qui répond
+  beaucoup et une machine qui interroge beaucoup n'ont pas le même profil ;
+- le **débit dans le temps**, par intervalles partant du premier paquet vu — un fichier
+  rejoué produit donc le même graphique que la capture d'origine.
+
+À l'écran, des barres CSS portent le chiffre écrit à côté : lisible par un lecteur d'écran,
+et sans bibliothèque de graphiques à charger.
+
 ## Ce qui sort de l'ordinaire
 
 `GET /api/v1/anomalies` rend l'**Expert Info** du projet : les anomalies TCP observées,
@@ -527,6 +541,12 @@ Dix scénarios manuels, avec leur résultat attendu, sont décrits dans
 Rédigées honnêtement, comme demandé. **Aucune de ces limites n'est cachée par le code :
 ce qui n'est pas fait n'est pas simulé.**
 
+- **Le graphique de débit n'a pas d'axe des temps.** Chaque barre porte son décalage en
+  secondes au survol, mais un pic ne peut pas être daté sans survoler. Suffisant pour repérer
+  une accélération, insuffisant pour la situer.
+- **Les statistiques prêtent à confusion si on les lit seules.** Elles décrivent ce qui a
+  été capturé, pas ce qui s'est passé sur le réseau : une machine absente du classement peut
+  simplement n'avoir rien émis pendant la fenêtre analysée.
 - **L'Expert Info ne couvre que quatre familles** — retransmission, poignée de main
   incomplète, RST inattendu, fenêtre nulle. Les paquets hors séquence et les délais anormaux
   ne sont pas encore analysés.
