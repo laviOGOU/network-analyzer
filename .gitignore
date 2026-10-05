@@ -60,3 +60,8 @@ desktop.ini
 
 # Configuration d'un poste, pas une propriete du logiciel.
 profils.json
+
+# Regle explicite : aucun document Word sur GitHub. Le .md est versionne,
+# le .docx est genere en local a partir de lui.
+*.docx
+*.doc
