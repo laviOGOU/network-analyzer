@@ -1512,3 +1512,65 @@ Parce qu'une zone doit dire ce qu'elle est, pas ce qu'elle contient. Le titre «
 paquet sélectionné » indique la nature du contenu **avant** qu'on ait cliqué : un lecteur qui
 découvre l'écran sait à quoi sert le volet vide. Un titre qui décrit le contenu ne renseigne
 que ceux qui savent déjà.
+
+
+---
+
+# Vues nommées — la page suit enfin la structure du sujet
+
+## Ce qui a changé
+
+La page n'est plus une suite de neuf blocs : elle porte **cinq vues nommées**, celles du
+sujet.
+
+| Vue | Ce qu'elle rassemble |
+|---|---|
+| **Traffic** | les chiffres, les principales sources, le débit, les statistiques, l'historique |
+| **Connections** | les communications observées, le récit d'une conversation |
+| **Protocols** | les protocoles, leur rôle, la vue par couche |
+| **Alerts** | les détections, l'Expert Info et ses critères |
+| **Paquets** | la liste des paquets et le détail du paquet sélectionné |
+
+**La barre de capture reste visible dans toutes les vues.** C'est le point de départ du sujet :
+on ne peut pas la cacher parce qu'on a changé d'onglet.
+
+## Pourquoi ces choix
+
+**La vue choisie est dans l'adresse.** Elle peut donc être mise en favori, partagée, et un
+rafraîchissement ramène où l'on était. Sans cela, un visiteur qui recharge la page perd le fil
+— et pendant une démonstration, c'est exactement le moment où l'on ne veut pas se perdre.
+
+**La vue courante se reconnaît par un trait de trois pixels *et* par son contraste.** Pas par
+la seule couleur : un trait reste visible en niveaux de gris, une différence de teinte non.
+
+**Au clavier, les flèches passent d'une vue à l'autre**, comme dans un groupe d'onglets. Sans
+cela, il faut tabuler sur chaque onglet pour en changer — et un jury qui navigue au clavier
+voit immédiatement la différence.
+
+**Une vue inconnue dans l'adresse retombe sur la première.** Un lien mal recopié ne doit pas
+ressembler à une panne.
+
+## Ce qui n'est pas encore fait
+
+**La vue détaillée unifiée du §9** — *Technical information + Analysis + Human explanation +
+Risk / status* **au même endroit**. Les quatre blocs existent, mais ils restent répartis entre
+la table des communications, les explications et le récit. C'est la prochaine étape, et c'est
+celle qui manque pour que la démonstration se déroule sans changer d'écran.
+
+**L'affichage de l'enrichissement** (§8, étape 7 de la démonstration) : l'appel à l'API
+externe existe et fonctionne, mais son résultat n'est montré nulle part.
+
+## Deux questions de défense
+
+**1. Pourquoi des onglets plutôt qu'une seule page qui défile ?**
+
+Parce que le sujet nomme lui-même cette structure, et parce qu'une page unique de neuf blocs
+ne dit pas où commencer. Des onglets imposent un premier choix, et un premier choix est
+exactement ce qui manquait. Le revers — on ne voit plus tout d'un coup d'œil — est compensé par
+l'adresse : chaque vue a la sienne, et se partage.
+
+**2. Pourquoi ne pas avoir caché la barre de capture dans la vue Traffic ?**
+
+Parce qu'elle n'est pas une information sur le trafic : c'est le contrôle qui **produit** le
+trafic. La ranger dans une vue ferait qu'on ne pourrait plus l'arrêter depuis les autres —
+c'est-à-dire au moment précis où l'on regarde autre chose.

@@ -1826,3 +1826,73 @@ function signalerCriteresEcartes(champs) {
   relireEtat();
   setInterval(relireEtat, 2000);
 })();
+
+/* ================================================================== vues de l'analyse
+
+   Le sujet nomme la structure : vue generale (Traffic, Connections, Protocols, Alerts),
+   vue des paquets, vue detaillee. Une page unique de neuf blocs ne dit pas ou commencer.
+
+   Deux precautions :
+
+   - **La vue choisie est dans l'adresse** (le fragment). Elle peut donc etre mise en favori
+     et partagee, et un rafraichissement ramene la ou on etait. Sans cela, un visiteur curieux
+     qui recharge la page perd le fil.
+   - **La capture reste visible dans toutes les vues.** C'est le point de depart du sujet : on
+     ne peut pas la cacher parce qu'on a change d'onglet. */
+(function () {
+  "use strict";
+
+  const onglets = [...document.querySelectorAll(".vue-onglet")];
+  const sections = [...document.querySelectorAll("[data-vue]")];
+  if (!onglets.length || !sections.length) return;
+
+  const VUES = onglets.map((onglet) => onglet.dataset.cible);
+  const DEFAUT = VUES[0] || "traffic";
+
+  function montrer(vue) {
+    let trouvee = false;
+    sections.forEach((section) => {
+      const sienne = section.dataset.vue === vue;
+      section.hidden = !sienne;
+      if (sienne) trouvee = true;
+    });
+    onglets.forEach((onglet) => {
+      onglet.setAttribute("aria-current", String(onglet.dataset.cible === vue));
+    });
+    return trouvee;
+  }
+
+  function choisir(vue, ecrireAdresse) {
+    // Une vue inconnue dans l'adresse ne doit pas laisser un ecran vide : on retombe sur la
+    // premiere. Un lien mal recopie ne doit pas ressembler a une panne.
+    if (!montrer(vue)) {
+      vue = DEFAUT;
+      montrer(vue);
+    }
+    if (ecrireAdresse) history.replaceState(null, "", `#${vue}`);
+    return vue;
+  }
+
+  onglets.forEach((onglet) => {
+    onglet.addEventListener("click", () => choisir(onglet.dataset.cible, true));
+    // Le clavier seul : fleches gauche et droite passent d'une vue a l'autre, comme dans un
+    // groupe d'onglets. Sans cela, il faut tabuler sur chaque onglet pour en changer.
+    onglet.addEventListener("keydown", (evenement) => {
+      const index = VUES.indexOf(onglet.dataset.cible);
+      let cible = null;
+      if (evenement.key === "ArrowRight") cible = VUES[(index + 1) % VUES.length];
+      if (evenement.key === "ArrowLeft") cible = VUES[(index - 1 + VUES.length) % VUES.length];
+      if (evenement.key === "Home") cible = VUES[0];
+      if (evenement.key === "End") cible = VUES[VUES.length - 1];
+      if (!cible) return;
+      evenement.preventDefault();
+      choisir(cible, true);
+      const suivant = onglets.find((o) => o.dataset.cible === cible);
+      if (suivant) suivant.focus();
+    });
+  });
+
+  window.addEventListener("hashchange", () => choisir(location.hash.slice(1) || DEFAUT, false));
+
+  choisir(location.hash.slice(1) || DEFAUT, true);
+})();

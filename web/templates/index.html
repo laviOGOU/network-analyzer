@@ -59,6 +59,14 @@
 {# Barre de filtre d'affichage. Elle agit sur les trois listes à la fois — paquets,
    communications, détections — parce qu'un filtre qui ne s'appliquerait qu'à une partie
    de la page donnerait deux réponses différentes à la même question. #}
+<nav class="vues" aria-label="Vues de l'analyse">
+  <button type="button" class="vue-onglet" data-cible="traffic">Traffic</button>
+  <button type="button" class="vue-onglet" data-cible="connections">Connections</button>
+  <button type="button" class="vue-onglet" data-cible="protocols">Protocols</button>
+  <button type="button" class="vue-onglet" data-cible="alerts">Alerts</button>
+  <button type="button" class="vue-onglet" data-cible="paquets">Paquets</button>
+</nav>
+
 <section class="barre-filtre" aria-labelledby="titre-filtre">
   <h2 id="titre-filtre" class="sr-only">Filtre d'affichage</h2>
   <div class="barre-filtre__ligne">
@@ -140,7 +148,7 @@
 </details>
 
 <main>
-  <section aria-labelledby="titre-capture" class="section-capture">
+  <section data-vue-toujours="1" aria-labelledby="titre-capture" class="section-capture">
     <div class="titre-section--ligne">
       <h2 id="titre-capture" class="titre-section">Capture en direct</h2>
     </div>
@@ -195,7 +203,7 @@
     <p class="aide" id="vivant-compteur"></p>
   </section>
 
-  <section aria-labelledby="titre-traffic">
+  <section data-vue="traffic" aria-labelledby="titre-traffic">
     <h2 id="titre-traffic" class="titre-section">Traffic</h2>
     <div class="cartes" id="cartes">
       {# Valeurs remplies par le JavaScript : une seule source de vérité. #}
@@ -208,18 +216,18 @@
   </section>
 
   <div class="colonnes">
-    <section aria-labelledby="titre-protocoles">
+    <section data-vue="protocols" aria-labelledby="titre-protocoles">
       <h2 id="titre-protocoles" class="titre-section">Protocols</h2>
       <ul class="repartition" id="repartition"></ul>
     </section>
 
-    <section aria-labelledby="titre-sources">
+    <section data-vue="traffic" aria-labelledby="titre-sources">
       <h2 id="titre-sources" class="titre-section">Top sources</h2>
       <ul class="repartition" id="sources"></ul>
     </section>
   </div>
 
-  <section aria-labelledby="titre-detections">
+  <section data-vue="alerts" aria-labelledby="titre-detections">
     <div class="titre-section--ligne">
       <h2 id="titre-detections" class="titre-section">Alerts</h2>
       <div class="filtres">
@@ -247,7 +255,7 @@
     </p>
   </section>
 
-  <section aria-labelledby="titre-statistiques">
+  <section data-vue="traffic" aria-labelledby="titre-statistiques">
     <div class="titre-section--ligne">
       <h2 id="titre-statistiques" class="titre-section">Répartitions et débit</h2>
     </div>
@@ -282,7 +290,7 @@
     </div>
   </section>
 
-  <section aria-labelledby="titre-anomalies">
+  <section data-vue="alerts" aria-labelledby="titre-anomalies">
     <div class="titre-section--ligne">
       <h2 id="titre-anomalies" class="titre-section">Expert Info</h2>
       <p class="aide" id="anomalies-resume"></p>
@@ -296,7 +304,7 @@
     <div id="anomalies-liste"></div>
   </section>
 
-  <section aria-labelledby="titre-communications">
+  <section data-vue="connections" aria-labelledby="titre-communications">
     <div class="titre-section--ligne">
       <h2 id="titre-communications" class="titre-section">Connections</h2>
       <div class="filtres">
@@ -361,7 +369,7 @@
      Trois zones, visibles ensemble et nommées comme dans les outils de référence : la liste
      des paquets, le détail du paquet sélectionné, le contenu du paquet. Les empiler dans une
      fenêtre qu'il faut ouvrir obligerait à retenir ce qu'on vient de quitter. #}
-  <div class="paquet-detail" id="paquet-detail" aria-labelledby="paquet-detail-titre">
+  <div class="paquet-detail" id="paquet-detail" data-vue="paquets" aria-labelledby="paquet-detail-titre">
     <div class="detail-entete">
       <h3 id="paquet-detail-titre">Détail du paquet sélectionné</h3>
       <button type="button" class="bouton bouton--fantome" id="paquet-detail-fermer">
@@ -408,7 +416,7 @@
     <div id="recit-phrases"></div>
   </div>
 
-  <section aria-labelledby="titre-paquets">
+  <section data-vue="paquets" aria-labelledby="titre-paquets">
     <div class="titre-section--ligne">
       <h2 id="titre-paquets" class="titre-section">Liste des paquets</h2>
       <div class="filtres">
@@ -456,7 +464,7 @@
     </p>
   </section>
 
-  <section aria-labelledby="titre-sessions">
+  <section data-vue="traffic" aria-labelledby="titre-sessions">
     <h2 id="titre-sessions" class="titre-section">Sessions</h2>
     <p class="aide">Une session correspond à un lancement de l'agent. En phase actuelle,
        cette liste vit en mémoire et disparaît au redémarrage du backend.</p>

@@ -133,6 +133,42 @@
    Des barres plutôt qu'une bibliothèque de graphiques : la même information, lisible par
    un lecteur d'écran (le chiffre est écrit à côté), et pas une dépendance de plus à
    charger et à maintenir. */
+/* --------------------------------------------------------------- vues de l'analyse
+   Le sujet nomme lui-même la structure : Vue générale (Traffic, Connections, Protocols,
+   Alerts), vue des paquets, vue détaillée. Une page unique de neuf blocs ne dit pas où
+   commencer ; une barre d'onglets le dit sans rien expliquer. */
+.vues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--bordure);
+}
+
+.vue-onglet {
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  color: var(--texte-doux);
+  font: inherit;
+  font-size: .95rem;
+  padding: .6rem 1rem;
+  cursor: pointer;
+  border-radius: .3rem .3rem 0 0;
+}
+
+.vue-onglet:hover { background: var(--surface-2); color: var(--texte); }
+
+/* L'onglet courant se reconnaît par un trait **et** par son contraste — pas par la seule
+   couleur : un trait de trois pixels reste visible en niveaux de gris. */
+.vue-onglet[aria-current="true"] {
+  color: var(--primaire);
+  border-bottom-color: var(--primaire);
+  font-weight: 600;
+}
+
+.vue-onglet:focus-visible { outline: 2px solid var(--primaire); outline-offset: -2px; }
+
 /* ------------------------------------------------------------------ capture en direct
    Les deux états d'une capture doivent se distinguer d'un coup d'œil : on ne peut pas
    laisser croire qu'on écoute alors qu'on a arrêté, ni l'inverse. */

@@ -61,6 +61,35 @@ function verifier(intitule, condition, precision = "") {
   await page.waitForTimeout(400);
 
   const lignes = await page.locator("#corps-communications tr").count();
+  // Les vues nommees : au depart, une seule est affichee, et les quatre du sujet existent.
+  const vues = await page.evaluate(() => {
+    const onglets = [...document.querySelectorAll(".vue-onglet")].map((o) => o.dataset.cible);
+    const visibles = [...document.querySelectorAll("[data-vue]")].filter((s) => !s.hidden)
+      .map((s) => s.dataset.vue);
+    // La section de capture porte `data-vue-toujours`, pas `data-vue` : elle doit rester
+    // visible quelle que soit la vue, et c'est exactement ce qu'on vérifie. La chercher avec
+    // le sélecteur `[data-vue]` ne la trouvait pas — le contrôle était faux, pas la page.
+    const titreCapture = document.getElementById("titre-capture");
+    const sectionCapture = titreCapture ? titreCapture.closest("section") : null;
+    return { onglets, visibles: [...new Set(visibles)],
+             captureVisible: sectionCapture ? !sectionCapture.hidden : false,
+             courant: document.querySelector(".vue-onglet[aria-current='true']")?.dataset.cible };
+  });
+  verifier("les vues nommees du sujet existent",
+    ["traffic", "connections", "protocols", "alerts"].every((v) => vues.onglets.includes(v)),
+    vues.onglets.join(" · "));
+  verifier("une seule vue est affichee a la fois",
+    vues.visibles.length === 1, `visibles : ${vues.visibles.join(", ") || "aucune"} · courant : ${vues.courant}`);
+  verifier("la barre de capture reste visible quelle que soit la vue",
+    vues.captureVisible, `capture affichee : ${vues.captureVisible}`);
+
+  // Les controles suivants portent sur des sections d'autres vues : on les reaffiche toutes,
+  // la commutation ayant ete verifiee juste au-dessus.
+  await page.evaluate(() => {
+    document.querySelectorAll("[data-vue]").forEach((section) => { section.hidden = false; });
+  });
+  await page.waitForTimeout(300);
+
   verifier("la table des communications se remplit", lignes > 0, `${lignes} ligne(s)`);
   // Capture de la section, et non de la page entière : la page complète fait plus de
   // dix-huit mille pixels de haut, illisible une fois réduite, et inutile comme preuve.

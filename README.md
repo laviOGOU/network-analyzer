@@ -388,6 +388,15 @@ sur des adresses IPv6 que personne ne lit.
 l'adresse est le fait vérifiable. Une adresse partagée par plusieurs noms reçoit le plus
 récemment observé, et l'outil le dit « d'après le DNS ».
 
+## Cinq vues nommées, celles du sujet
+
+La page porte les vues du §9 : **Traffic**, **Connections**, **Protocols**, **Alerts** et
+**Paquets**. La barre de capture reste visible dans toutes.
+
+La vue courante est dans l'adresse (`#traffic`, `#connections`…) : elle se met en favori, se
+partage, et résiste à un rafraîchissement. Au clavier, les flèches passent d'une vue à
+l'autre.
+
 ## Trois zones, comme dans les outils de référence
 
 La vue des paquets se lit d'un seul regard, en trois zones **nommées et visibles ensemble** :
@@ -521,7 +530,7 @@ from backend.explain import explications     # toutes les explications applicabl
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**375 tests** · **45 vérifications navigateur**, dont :
+**375 tests** · **48 vérifications navigateur**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole
