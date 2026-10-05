@@ -133,6 +133,66 @@
    Des barres plutôt qu'une bibliothèque de graphiques : la même information, lisible par
    un lecteur d'écran (le chiffre est écrit à côté), et pas une dépendance de plus à
    charger et à maintenir. */
+/* ------------------------------------------------------------------ capture en direct
+   Les deux états d'une capture doivent se distinguer d'un coup d'œil : on ne peut pas
+   laisser croire qu'on écoute alors qu'on a arrêté, ni l'inverse. */
+.barre-capture {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  align-items: center;
+  margin-bottom: .75rem;
+}
+
+.choix-interface {
+  background: var(--surface);
+  color: var(--texte);
+  border: 1px solid var(--bordure);
+  border-radius: .4rem;
+  padding: .45rem .6rem;
+  font: inherit;
+  font-size: .85rem;
+  min-width: 14rem;
+  max-width: 100%;
+}
+
+.barre-capture .champ-filtre { flex: 1 1 16rem; min-width: 0; }
+
+.bouton--principal {
+  background: var(--primaire);
+  color: #fff;
+  border-color: var(--primaire);
+}
+
+.bouton--danger {
+  background: var(--secondaire-solide, #D92D20);
+  color: #fff;
+  border-color: var(--secondaire-solide, #D92D20);
+}
+
+.bouton:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Le témoin de capture : une pastille ET un mot. La couleur seule ne se lit pas pour tout
+   le monde, et « ça clignote » ne veut rien dire sans étiquette. */
+.temoin {
+  display: inline-block;
+  width: .6rem;
+  height: .6rem;
+  border-radius: 50%;
+  background: var(--texte-doux);
+  margin-right: .4rem;
+  vertical-align: middle;
+}
+
+.temoin--actif { background: var(--secondaire-solide, #D92D20); }
+
+.tableau-enveloppe--vivant {
+  max-height: 26rem;
+  overflow-y: auto;
+}
+
+.ligne-vide td { text-align: center; color: var(--texte-doux); padding: 1.5rem .5rem; }
+
 /* Le détail d'un paquet est un panneau permanent, pas une fenêtre : les trois zones se
    lisent ensemble, comme dans les outils de référence. */
 .detail-vide {

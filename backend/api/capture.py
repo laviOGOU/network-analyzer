@@ -9,13 +9,32 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from backend import pilotage
-from backend.securite import verifier_jeton
 
 router = APIRouter(tags=["capture"])
+
+#: Un lancement de capture n'est accepté que depuis la machine qui l'exécute.
+LOCALES = {"127.0.0.1", "::1", "localhost", "::ffff:127.0.0.1"}
+
+
+def depuis_la_machine(request: Request) -> None:
+    """Refuse un lancement de capture venant d'ailleurs que du poste lui-même.
+
+    **Pourquoi pas le jeton d'agent, comme pour l'ingestion ?** Parce que le bouton est dans
+    le navigateur : lui faire porter le jeton obligerait à l'écrire dans la page, donc à
+    l'exposer — et un secret exposé cesse d'être un secret. La règle retenue est plus juste :
+    la capture a lieu **sur cette machine**, donc seul quelqu'un devant cette machine peut la
+    lancer. Depuis le réseau, elle reste impossible.
+    """
+    hote = request.client.host if request.client else ""
+    if hote not in LOCALES:
+        raise HTTPException(
+            status_code=403,
+            detail="Une capture ne peut être lancée que depuis la machine qui la réalise.",
+        )
 
 
 @router.get("/interfaces", summary="Interfaces réseau réellement présentes")
@@ -43,7 +62,7 @@ def etat_capture() -> dict[str, Any]:
 
 @router.post("/capture/demarrer", summary="Démarrer une capture")
 def demarrer_capture(
-    _jeton: Annotated[None, Depends(verifier_jeton)],
+    request: Request,
     interface: Annotated[str, Query(max_length=64, description="Nom de l'interface")],
     filtre: Annotated[str, Query(max_length=200, description="Filtre de capture BPF, optionnel")] = "",
     nom: Annotated[str, Query(max_length=60, description="Nom de la session")] = "",
@@ -54,6 +73,7 @@ def demarrer_capture(
     un filtre de capture masque définitivement ce qu'il exclut, contrairement au filtre
     d'affichage.
     """
+    depuis_la_machine(request)
     try:
         etat = pilotage.pilote.demarrer(interface, filtre, nom)
     except pilotage.ErreurPilotage as erreur:
@@ -62,8 +82,9 @@ def demarrer_capture(
 
 
 @router.post("/capture/arreter", summary="Arrêter une capture")
-def arreter_capture(_jeton: Annotated[None, Depends(verifier_jeton)]) -> dict[str, Any]:
+def arreter_capture(request: Request) -> dict[str, Any]:
     """Arrête la capture en cours. **Ce qui a été capturé reste** : c'est l'historique."""
+    depuis_la_machine(request)
     return pilotage.pilote.arreter()
 
 

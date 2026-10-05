@@ -1560,3 +1560,269 @@ function signalerCriteresEcartes(champs) {
       // Un sélecteur vide n'empêche pas de filtrer à la main : on ne bloque rien.
     });
 })();
+
+/* ================================================================== capture en direct
+
+   Trois idées gouvernent ce bloc :
+
+   1. **Un paquet s'affiche quand il arrive.** La page interrogeait le serveur toutes les
+      trois secondes : le trafic apparaissait par vagues, et un paquet pouvait défiler avant
+      qu'on ait pu le regarder. Le flux continu règle ce point.
+
+   2. **On accumule et on affiche par petits lots.** Sur cette machine, une capture atteint
+      quatre-vingt paquets par seconde. Ajouter une ligne au document pour chaque paquet
+      tuerait le navigateur en quelques secondes. Les paquets sont donc mis de côté et
+      affichés toutes les 200 ms — ce que l'œil perçoit comme du continu.
+
+   3. **Pause et Arrêter ne font pas la même chose.** Pause fige l'affichage et **continue
+      de capturer** : on peut lire un paquet sans perdre le trafic. Arrêter termine la
+      capture, et ce qui a été capturé reste consultable. Confondre les deux ferait perdre
+      des données au moment précis où on les regarde. */
+(function () {
+  "use strict";
+
+  const zone = {
+    interface: document.getElementById("choix-interface"),
+    filtre: document.getElementById("filtre-capture"),
+    demarrer: document.getElementById("capture-demarrer"),
+    pause: document.getElementById("capture-pause"),
+    arreter: document.getElementById("capture-arreter"),
+    etat: document.getElementById("capture-etat"),
+    erreur: document.getElementById("capture-erreur"),
+    corps: document.getElementById("corps-vivant"),
+    compteur: document.getElementById("vivant-compteur"),
+  };
+  if (!zone.demarrer || !zone.corps) return;
+
+  //: Nombre de lignes gardées à l'écran. Wireshark en affiche trois mille sans les dessiner
+  //: toutes ; ici, au-delà de cinq cents, la page devient lourde pour rien.
+  const LIGNES_MAX = 500;
+  const PERIODE_AFFICHAGE = 200;
+
+  let flux = null;
+  let enAttente = [];
+  let minuteur = null;
+  let enPause = false;
+  let affiches = 0;
+  let recus = 0;
+
+  function dire(texte, erreur) {
+    zone.etat.textContent = texte;
+    zone.erreur.hidden = !erreur;
+    if (erreur) zone.erreur.textContent = erreur;
+  }
+
+  async function appeler(chemin, options) {
+    const reponse = await fetch(chemin, options);
+    if (!reponse.ok) {
+      let motif = `réponse ${reponse.status}`;
+      try {
+        const corps = await reponse.json();
+        if (corps && corps.detail) motif = corps.detail;
+      } catch (erreur) { /* réponse sans corps JSON : on garde le code */ }
+      throw new Error(motif);
+    }
+    return reponse.json();
+  }
+
+  // ------------------------------------------------------------------ interfaces
+  function remplirInterfaces(liste) {
+    zone.interface.textContent = "";
+    const vide = document.createElement("option");
+    vide.value = "";
+    vide.textContent = liste.length ? "Choisir une interface…" : "Aucune interface utilisable";
+    zone.interface.appendChild(vide);
+
+    liste.forEach((interface_) => {
+      const option = document.createElement("option");
+      option.value = interface_.nom;
+      // L'adresse accompagne le nom quand elle existe : deux interfaces portent parfois le
+      // même libellé, et seule l'adresse les distingue.
+      option.textContent = interface_.adresse
+        ? `${interface_.nom} — ${interface_.adresse}` : interface_.nom;
+      zone.interface.appendChild(option);
+    });
+  }
+
+  async function chargerInterfaces() {
+    try {
+      const donnees = await appeler("/api/v1/interfaces", { headers: { Accept: "application/json" } });
+      remplirInterfaces(donnees.interfaces || []);
+    } catch (erreur) {
+      remplirInterfaces([]);
+      dire("Interfaces indisponibles.", `Lecture des interfaces impossible : ${erreur.message}`);
+    }
+  }
+
+  // ------------------------------------------------------------------ affichage
+  function ligne(paquet) {
+    const rangee = document.createElement("tr");
+    const detail = paquet.details || {};
+
+    const cellules = [
+      { texte: heure(paquet.horodatage), mono: true },
+      { texte: paquet.ip_source || "?", mono: true },
+      { texte: paquet.ip_destination || "?", mono: true },
+      { texte: paquet.protocole || "?", mono: false },
+      { texte: paquet.port_destination || paquet.port_source || "", mono: true },
+      { texte: paquet.taille || "", mono: true },
+      { texte: resume(paquet, detail), mono: false },
+    ];
+
+    cellules.forEach((cellule) => {
+      const td = document.createElement("td");
+      if (cellule.mono) td.className = "mono-cellule";
+      td.textContent = cellule.texte;
+      rangee.appendChild(td);
+    });
+    return rangee;
+  }
+
+  function heure(horodatage) {
+    if (!horodatage) return "";
+    const moment = new Date(horodatage);
+    if (Number.isNaN(moment.getTime())) return String(horodatage).slice(11, 19);
+    return moment.toLocaleTimeString("fr-FR", { hour12: false });
+  }
+
+  function resume(paquet, detail) {
+    if (detail.tls_sni) return `HTTPS vers ${detail.tls_sni}`;
+    if (detail.http_hote) return `HTTP ${detail.http_methode || ""} ${detail.http_hote}`.trim();
+    if (detail.processus_local) return detail.processus_local;
+    if (detail.dns_question) return `DNS ${detail.dns_question}`;
+    if (paquet.flags_tcp) return `TCP ${paquet.flags_tcp}`;
+    if (paquet.analyse_partielle) return `analyse partielle — ${paquet.motif_partiel || ""}`;
+    return "";
+  }
+
+  function ecouler() {
+    if (!enAttente.length) return;
+    const lot = enAttente;
+    enAttente = [];
+
+    const vide = zone.corps.querySelector(".ligne-vide");
+    if (vide) vide.remove();
+
+    // Les plus récents en tête : on regarde ce qui vient d'arriver, pas ce qui est passé.
+    lot.reverse().forEach((paquet) => zone.corps.insertBefore(ligne(paquet), zone.corps.firstChild));
+
+    while (zone.corps.children.length > LIGNES_MAX) {
+      zone.corps.removeChild(zone.corps.lastElementChild);
+    }
+    affiches += lot.length;
+
+    zone.compteur.textContent = enPause
+      ? `${recus} paquet(s) reçu(s) · affichage figé à ${affiches} · la capture continue`
+      : `${recus} paquet(s) reçu(s) · ${zone.corps.children.length} affiché(s)`;
+  }
+
+  // ------------------------------------------------------------------ commandes
+  function ouvrirFlux() {
+    if (flux) flux.close();
+    flux = new EventSource("/api/v1/live");
+    flux.onmessage = (evenement) => {
+      try {
+        const paquet = JSON.parse(evenement.data);
+        recus += 1;
+        // En pause, on **compte quand même** : le trafic continue d'arriver, seule la liste
+        // ne bouge plus.
+        if (!enPause) enAttente.push(paquet);
+      } catch (erreur) { /* une donnée illisible ne doit pas arrêter le flux */ }
+    };
+  }
+
+  function fermerFlux() {
+    if (flux) { flux.close(); flux = null; }
+    if (minuteur) { clearInterval(minuteur); minuteur = null; }
+  }
+
+  function majBoutons(enCours) {
+    zone.demarrer.disabled = enCours;
+    zone.pause.disabled = !enCours;
+    zone.arreter.disabled = !enCours;
+    zone.interface.disabled = enCours;
+    if (!enCours) { zone.pause.setAttribute("aria-pressed", "false"); zone.pause.textContent = "Pause"; }
+  }
+
+  async function demarrer() {
+    const interface_ = zone.interface.value;
+    if (!interface_) {
+      dire("Choisissez d'abord une interface.", "Aucune interface sélectionnée.");
+      zone.interface.focus();
+      return;
+    }
+    const parametres = new URLSearchParams({ interface: interface_ });
+    if (zone.filtre.value.trim()) parametres.set("filtre", zone.filtre.value.trim());
+
+    zone.demarrer.disabled = true;
+    try {
+      const etat = await appeler(`/api/v1/capture/demarrer?${parametres}`, { method: "POST" });
+      enPause = false;
+      recus = 0;
+      affiches = 0;
+      enAttente = [];
+      zone.corps.textContent = "";
+      ouvrirFlux();
+      minuteur = setInterval(ecouler, PERIODE_AFFICHAGE);
+      majBoutons(true);
+      dire(`Capture en cours sur « ${etat.interface} ».`);
+    } catch (erreur) {
+      zone.demarrer.disabled = false;
+      dire("La capture n'a pas pu démarrer.", erreur.message);
+    }
+  }
+
+  async function arreter() {
+    zone.arreter.disabled = true;
+    try {
+      await appeler("/api/v1/capture/arreter", { method: "POST" });
+      fermerFlux();
+      ecouler();
+      majBoutons(false);
+      dire(`Capture arrêtée. ${recus} paquet(s) reçus — ils restent dans l'historique.`);
+      // Les vues suivantes se remettent à jour d'elles-mêmes : la capture n'alimente plus
+      // la liste vivante, mais elle a rempli la base.
+      document.dispatchEvent(new CustomEvent("capture-terminee"));
+    } catch (erreur) {
+      dire("L'arrêt a échoué.", erreur.message);
+      zone.arreter.disabled = false;
+    }
+  }
+
+  zone.demarrer.addEventListener("click", demarrer);
+  zone.arreter.addEventListener("click", arreter);
+  zone.pause.addEventListener("click", () => {
+    enPause = !enPause;
+    zone.pause.setAttribute("aria-pressed", String(enPause));
+    zone.pause.textContent = enPause ? "Reprendre" : "Pause";
+    if (!enPause) ecouler();     // on rattrape ce qui s'est accumulé pendant la pause
+    dire(enPause ? "Affichage figé — la capture continue." : "Affichage repris.");
+  });
+
+  // L'état est relu régulièrement : une capture peut s'arrêter d'elle-même — durée atteinte,
+  // interface perdue — et l'écran doit le dire au lieu de laisser croire qu'on écoute encore.
+  async function relireEtat() {
+    try {
+      const etat = await appeler("/api/v1/capture/etat", { headers: { Accept: "application/json" } });
+      if (etat.en_cours) {
+        majBoutons(true);
+        if (!flux) ouvrirFlux();
+        if (!minuteur) minuteur = setInterval(ecouler, PERIODE_AFFICHAGE);
+        dire(`Capture en cours sur « ${etat.interface} » depuis ${etat.secondes} s · ${recus} paquet(s) reçus.`);
+      } else if (flux) {
+        fermerFlux();
+        ecouler();
+        majBoutons(false);
+        const detail = (etat.journal || []).slice(-1)[0];
+        dire(detail ? `Capture arrêtée. Dernière ligne de l'agent : ${detail}`
+                    : "Capture arrêtée.");
+      } else {
+        majBoutons(false);
+      }
+    } catch (erreur) { /* le serveur est peut-être en train de redémarrer */ }
+  }
+
+  chargerInterfaces();
+  relireEtat();
+  setInterval(relireEtat, 2000);
+})();

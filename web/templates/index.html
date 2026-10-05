@@ -140,6 +140,61 @@
 </details>
 
 <main>
+  <section aria-labelledby="titre-capture" class="section-capture">
+    <div class="titre-section--ligne">
+      <h2 id="titre-capture" class="titre-section">Capture en direct</h2>
+    </div>
+
+    <div class="barre-capture">
+      <label class="sr-only" for="choix-interface">Interface à écouter</label>
+      <select id="choix-interface" class="choix-interface">
+        <option value="">Chargement des interfaces…</option>
+      </select>
+
+      <label class="sr-only" for="filtre-capture">Filtre de capture</label>
+      <input id="filtre-capture" type="text" class="champ-filtre" autocomplete="off"
+             spellcheck="false" placeholder="Filtre de capture (facultatif) : tcp port 443">
+
+      <button type="button" class="bouton bouton--principal" id="capture-demarrer">Démarrer</button>
+      <button type="button" class="bouton bouton--fantome" id="capture-pause" aria-pressed="false"
+              disabled>Pause</button>
+      <button type="button" class="bouton bouton--danger" id="capture-arreter" disabled>Arrêter</button>
+    </div>
+
+    <p class="aide" id="capture-etat" role="status">Capture arrêtée.</p>
+    <p class="filtre-erreur" id="capture-erreur" role="alert" hidden></p>
+
+    <p class="aide">
+      Le filtre de capture est <strong>différent</strong> du filtre d'affichage, et plus
+      sévère : ce qu'il exclut n'est <strong>jamais</strong> capturé, alors qu'un filtre
+      d'affichage peut toujours être retiré après coup. Il s'écrit en syntaxe BPF —
+      <code>tcp port 443</code>, <code>udp port 53</code> — et non <code>proto:tcp</code>.
+    </p>
+
+    <div class="tableau-enveloppe tableau-enveloppe--vivant">
+      <table class="tableau" id="tableau-vivant">
+        <caption class="sr-only">Paquets reçus en direct, du plus récent au plus ancien</caption>
+        <thead>
+          <tr>
+            <th scope="col">Heure</th>
+            <th scope="col">Source</th>
+            <th scope="col">Destination</th>
+            <th scope="col">Protocole</th>
+            <th scope="col">Port</th>
+            <th scope="col">Taille</th>
+            <th scope="col">Détail</th>
+          </tr>
+        </thead>
+        <tbody id="corps-vivant">
+          <tr class="ligne-vide">
+            <td colspan="7">Aucune capture en cours. Choisissez une interface, puis Démarrer.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="aide" id="vivant-compteur"></p>
+  </section>
+
   <section aria-labelledby="titre-traffic">
     <h2 id="titre-traffic" class="titre-section">Traffic</h2>
     <div class="cartes" id="cartes">
