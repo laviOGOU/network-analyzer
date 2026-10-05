@@ -1,4 +1,75 @@
 /* =============================================================================
+   Export, couches et octets
+   ============================================================================= */
+
+.exports {
+  display: flex; flex-wrap: wrap; gap: .5rem;
+  align-items: center;
+  margin-top: .9rem;
+}
+
+.exports__intitule { font-size: .84rem; color: var(--texte-doux); }
+.exports .bouton { text-decoration: none; font-size: .82rem; }
+
+.paquet-detail {
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: var(--rayon);
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.couches-titre {
+  margin: 1rem 0 .6rem;
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--texte-faible);
+}
+
+.couche {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-doux);
+  border-radius: 0 var(--rayon-petit) var(--rayon-petit) 0;
+  padding: .7rem .9rem;
+  margin-bottom: .6rem;
+}
+
+.couche__nom { margin: 0 0 .3rem; font-size: .92rem; }
+.couche__role { margin: 0 0 .6rem; font-size: .84rem; color: var(--texte-doux); }
+
+.couche__champs { margin: 0; padding: 0; list-style: none; }
+.couche__champs li {
+  display: flex; flex-wrap: wrap; gap: .5rem;
+  justify-content: space-between;
+  padding: .2rem 0;
+  border-top: 1px solid var(--bord);
+  font-size: .82rem;
+}
+.couche__champs li:first-child { border-top: 0; }
+.couche__champ { color: var(--texte-doux); }
+.couche__valeur { font-family: var(--mono); color: var(--texte); }
+.couche__valeur--absente { color: var(--texte-faible); font-style: italic; }
+
+.hex {
+  font-family: var(--mono);
+  font-size: .8rem;
+  line-height: 1.5;
+  background: var(--surface-2);
+  border: 1px solid var(--bord);
+  border-radius: var(--rayon-petit);
+  padding: .8rem;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+@media (max-width: 640px) {
+  .hex { font-size: .7rem; }
+  .exports .bouton { font-size: .78rem; }
+}
+
+/* =============================================================================
    Barre de filtre et légende
    -----------------------------------------------------------------------------
    La légende réutilise les classes des pastilles réellement affichées : elle ne peut

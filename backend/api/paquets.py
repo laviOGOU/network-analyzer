@@ -13,7 +13,9 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import datetime as dt
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 try:
     # Les seuils de détection sont définis dans l'agent, qui les applique. On les lit
@@ -29,10 +31,12 @@ try:
 except ImportError:                                  # pragma: no cover
     SEUILS: dict[str, int] = {}
 
+from backend import export as mod_export
 from backend import filtres as mod_filtres
 from backend import filtres_sql as mod_filtres_sql
 from backend.dependances import obtenir_enrichissement, obtenir_stockage
 from backend.enrichment import Enrichissement
+from backend.explain import couches as mod_couches
 from backend.explain import llm
 from backend.explain import rules as moteur_explication
 from backend.storage import Stockage
@@ -193,6 +197,62 @@ def lister_detections(
         "seuils": SEUILS,
         "filtre_ignores": ignores,
     }
+
+
+@router.get("/layers", summary="Les couches réseau et leur rôle")
+def couches_reseau() -> dict[str, Any]:
+    """Rend la description des couches, pour la vue détaillée d'un paquet.
+
+    La connaissance reste ici, côté serveur : l'interface l'interroge une fois et la
+    réutilise. La placer dans le JavaScript aurait mis du savoir métier dans un fichier
+    que personne ne relit, et l'aurait rendu indiffusable à un autre client de l'API.
+    """
+    return mod_couches.description()
+
+
+@router.get("/export", summary="Exporter une vue en CSV ou JSON")
+def exporter(
+    stockage: Annotated[Stockage, Depends(obtenir_stockage)],
+    quoi: Annotated[str, Query(pattern="^(paquets|communications|detections)$",
+                               description="Ce qu'on exporte")] = "communications",
+    format: Annotated[str, Query(pattern="^(csv|json)$",
+                                 description="Format du fichier")] = "csv",
+    limite: Annotated[int, Query(ge=1, le=5000)] = 5000,
+    filtre: Annotated[str | None, Query(max_length=300)] = None,
+) -> Response:
+    """Rend les données affichées sous forme de fichier téléchargeable.
+
+    Ce qui sort est exactement ce que le tableau de bord montre : des métadonnées. Aucun
+    contenu de message n'est conservé par l'outil, donc aucun ne peut être exporté — la
+    règle du projet vaut aussi pour les fichiers qu'il produit.
+
+    Le filtre d'affichage s'applique : on exporte ce que l'on voit, et non tout ce qui
+    existe. Exporter davantage que ce qui est affiché serait une surprise désagréable.
+    """
+    criteres, _ignores = criteres_du_filtre(filtre, quoi)
+
+    if quoi == "paquets":
+        lignes = stockage.paquets(limite=limite, filtre=criteres)
+    elif quoi == "communications":
+        lignes = stockage.communications(limite=limite, filtre=criteres)
+    else:
+        lignes = stockage.detections(limite=limite, filtre=criteres)
+
+    maintenant = dt.datetime.now(dt.timezone.utc).isoformat()
+    nom = mod_export.nom_de_fichier(quoi, format, maintenant)
+
+    if format == "json":
+        contenu = mod_export.vers_json(lignes, quoi)
+        type_media = "application/json"
+    else:
+        contenu = mod_export.vers_csv(lignes, quoi)
+        type_media = "text/csv"
+
+    return Response(
+        content=contenu,
+        media_type=f"{type_media}; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{nom}"'},
+    )
 
 
 @router.get("/stats", summary="Chiffres du tableau de bord")

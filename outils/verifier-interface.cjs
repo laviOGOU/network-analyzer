@@ -274,6 +274,52 @@ function verifier(intitule, condition, precision = "") {
   // pas le script qui casse. Le compter comme une erreur ferait échouer le contrôle pour
   // une raison qui n'en est pas une.
   const erreursReelles = erreurs.filter((e) => !/400 \(Bad Request\)/.test(e));
+  /* ------------------------------------------- Lot A : couches, octets et export */
+  await page.locator("#titre-paquets").scrollIntoViewIfNeeded();
+  await page.waitForTimeout(500);
+  await page.locator("#corps-paquets .bouton-couches").first().click();
+  await page.waitForSelector("#paquet-detail:not([hidden])", { timeout: 8000 });
+  await page.waitForTimeout(400);
+
+  const nbCouches = await page.locator("#paquet-couches .couche").count();
+  verifier("le détail d'un paquet décrit les quatre couches", nbCouches === 4,
+    `${nbCouches} couche(s)`);
+  const role = (await page.locator(".couche__role").first().textContent()) || "";
+  verifier("chaque couche explique à quoi elle sert", role.length > 60);
+  const absents = await page.locator(".couche__valeur--absente").count();
+  verifier("ce que l'outil n'extrait pas est marqué comme tel", absents >= 4,
+    `${absents} champ(s) « non extrait »`);
+  const hex = (await page.locator("#paquet-hex").textContent()) || "";
+  verifier("la vue des octets montre les octets connus", /[0-9a-f]{2} [0-9a-f]{2}/.test(hex));
+  verifier("la vue des octets marque les octets inconnus", hex.includes("??"));
+  const avertissement = (await page.locator("#paquet-hex-avertissement").textContent()) || "";
+  verifier("l'avertissement dit que la vue est reconstruite",
+    /reconstruite/i.test(avertissement));
+  await page.locator("#paquet-detail").screenshot(
+    { path: chemin.join(dossier, "08-couches.png") });
+
+  await page.keyboard.press("Escape");
+  // `waitForSelector` attend la **visibilité** par défaut : un élément caché ne peut donc
+  // jamais la satisfaire. On demande explicitement l'état caché.
+  await page.waitForSelector("#paquet-detail", { state: "hidden", timeout: 5000 });
+  verifier("Échap ferme le détail du paquet", true);
+
+  // L'export : un lien de téléchargement, qui suit le filtre courant.
+  const lienExport = await page.locator("#export-communications-csv").getAttribute("href");
+  verifier("les liens d'export sont présents", /quoi=communications/.test(lienExport || ""));
+
+  const reponseExport = await page.request.get(
+    `${adresse}/api/v1/export?quoi=communications&format=csv`);
+  const corps = await reponseExport.text();
+  verifier("l'export CSV répond", reponseExport.status() === 200
+    && reponseExport.headers()["content-type"].includes("text/csv"));
+  verifier("l'export CSV est encodé pour un tableur français",
+    corps.startsWith("\ufeff") && corps.includes(";"));
+  verifier("l'export propose un nom de fichier",
+    (reponseExport.headers()["content-disposition"] || "").includes("network-analyzer_"));
+  verifier("l'export CSV ne contient aucune charge utile",
+    !/payload|contenu_du_message/i.test(corps));
+
   verifier("aucune erreur JavaScript", erreursReelles.length === 0,
     erreursReelles.slice(0, 3).join(" | "));
 

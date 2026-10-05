@@ -772,3 +772,103 @@ qui ne va pas.
   exception dans le traitement d'un paquet tuait tout le rejeu **en silence**. Le rejeu
   compte désormais les échecs et s'arrête au bout de cinq consécutifs en disant pourquoi,
   plutôt que de parcourir un million de paquets sans rien envoyer.
+
+
+---
+
+# Lot A — Voir et trier
+
+## 1. Ce qui a été construit
+
+| Élément | Où |
+|---|---|
+| Filtres d'affichage `proto:tcp port:443` | `backend/filtres.py`, `backend/filtres_sql.py` |
+| Légende des couleurs et des niveaux | `web/templates/index.html` (classes réelles) |
+| Vue par couche avec explication | `backend/explain/couches.py` |
+| Vue des octets des en-têtes | rendue depuis `/api/v1/layers` |
+| Export CSV et JSON | `backend/export.py` |
+| Validation du filtre de capture BPF | `agent/bpf.py` |
+
+## 2. Pourquoi ces choix
+
+**Le filtre est une donnée, jamais du texte.** L'expression devient des couples
+(champ, valeur) ; les valeurs deviennent des **paramètres liés** en SQL, et les noms de
+colonnes viennent d'une table écrite dans le code. Rien de ce que l'utilisateur écrit ne
+peut devenir une requête. Un test vérifie la forme des critères, un autre vérifie qu'une
+valeur hostile n'atteint jamais le fragment SQL, et un troisième l'exécute contre un vrai
+PostgreSQL : cinq tentatives d'injection, aucune ligne ramenée, base intacte.
+
+**Un filtre incompris est refusé, avec la liste des champs valides.** 400, et non une
+liste vide. Un filtre silencieusement ignoré ferait lire des résultats complets en croyant
+lire des résultats filtrés — l'utilisateur conclurait quelque chose de faux sur son réseau.
+
+**Un seul filtre pour trois listes, et rien n'est tu.** `proto` ne veut rien dire pour une
+détection. Trois comportements étaient possibles, deux sont mauvais : lever une erreur
+prive la vue d'affichage ; ignorer en silence fait mentir la liste. Le troisième est
+retenu : on applique ce qui s'applique, et l'interface annonce ce qui a été écarté.
+
+**La légende emploie les classes CSS réellement affichées.** Une légende recopiée à la main
+devient fausse au premier changement de couleur sans que personne ne s'en aperçoive. Un
+contrôle automatisé compare les couleurs calculées des deux côtés.
+
+**La vue des octets est reconstruite, et ses trous sont visibles.** Aucun octet brut ne
+circule dans ce projet : les octets affichés sont recalculés depuis les champs analysés.
+Ce que l'outil n'extrait pas — séquence, acquittement, fenêtre, sommes — s'affiche `??`.
+Les combler par des zéros donnerait un affichage plus complet et faux. Cette vue ne prétend
+pas montrer le paquet : elle montre **ce que l'analyseur en a compris**.
+
+**Le CSV commence par une marque d'encodage et sépare par des points-virgules.** Sans le
+BOM, Excel affiche « Ã© » à la place de « é » ; avec des virgules, un tableur français met
+tout dans une colonne. C'est le détail qui fait qu'un export correct « ne marche pas ».
+
+**Le filtre de capture est validé par la bibliothèque qui filtrera.** On ne réécrit pas un
+analyseur de syntaxe BPF : on demande à libpcap de compiler l'expression — la seule
+validation qui garantisse que ce qui est accepté ici le sera là. Une erreur de filtre de
+capture est irréversible : ce qui est exclu n'existe plus.
+
+## 3. Trois questions de défense
+
+**1. Pourquoi deux syntaxes de filtre différentes ?**
+
+Parce qu'elles ne font pas la même chose. Le filtre **d'affichage** trie ce qu'on regarde :
+il agit après coup, sur des données déjà reçues, et peut être changé à tout moment. Le
+filtre **de capture** décide de ce qui est enregistré : ce qu'il exclut n'existe plus. Le
+premier a des champs nommés et se cumule avec un ET ; le second est du BPF, évalué par
+libpcap avant même que le paquet remonte. Les confondre donnerait à croire qu'on peut
+« rattraper » une capture trop restrictive — c'est faux, et c'est la raison du message
+d'erreur qui rappelle la syntaxe de l'autre.
+
+**2. Votre vue hexadécimale est incomplète, avec des `??` partout. Quel intérêt ?**
+
+Elle est incomplète **parce qu'elle est honnête**. L'outil ne transporte aucun octet brut —
+c'est une règle du projet, pas un oubli — donc il ne peut montrer que ce qu'il a analysé.
+Afficher des zéros à la place des numéros de séquence serait plus joli et faux. Et la vue
+a une valeur pédagogique inattendue : elle montre exactement ce que l'analyseur comprend
+d'un paquet, ce qui est précisément le sujet du projet. Le jour où l'analyseur extraira
+`seq` et `ack` — prérequis de la détection des retransmissions — la vue se complétera
+d'elle-même, et un test échouera pour le rappeler.
+
+**3. Le filtre est-il protégé contre l'injection ?**
+
+Oui, et de trois façons qui se cumulent. L'expression est découpée en couples
+(champ, valeur) : il n'y a jamais de chaîne de requête à construire. Les valeurs passent
+par des paramètres liés, jamais par concaténation. Et les noms de colonnes viennent d'une
+table figée dans le code : une valeur ne peut pas devenir une colonne. Trois tests le
+vérifient — la forme des critères, l'absence de valeur utilisateur dans le fragment SQL, et
+l'exécution réelle de cinq tentatives contre PostgreSQL.
+
+## 4. Ce qui a été trouvé en écrivant ce lot
+
+- **Un champ sans objet dans une vue levait une erreur non rattrapée** : 500 sur le tableau
+  de bord, pour un critère qui ne concernait même pas cette liste. C'est ce qui a fait
+  naître la règle « on applique ce qui s'applique, et on annonce ce qui est écarté ».
+- **Un paquet dont l'adresse source et la destination sont identiques** violait une
+  contrainte du schéma — qui avait raison — et faisait échouer **tout le lot** en 500. La
+  ligne est désormais écartée avant l'insertion : le schéma reste la dernière ligne de
+  défense plutôt que la première.
+- **Un bouton effacé par le rendu** : le texte du détail d'un paquet était écrit dans la
+  cellule, ce qui remplaçait le bouton « Couches » qu'elle contient. Le texte va maintenant
+  dans un élément interne.
+- **Mon outil de vérification attendait des délais fixes**, et deux attentes impossibles
+  (`waitForSelector` attend la visibilité : un élément caché ne peut jamais la satisfaire).
+  Il attend désormais des états.

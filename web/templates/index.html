@@ -78,7 +78,21 @@
   </p>
   <p class="filtre-erreur" id="filtre-erreur" role="alert" hidden></p>
   <p class="filtre-resume" id="filtre-resume" hidden></p>
-</section>
+
+  {# Export : de simples liens de téléchargement, sans JavaScript. Le filtre courant
+     leur est ajouté par le script, pour qu'on exporte exactement ce qu'on voit. #}
+  <div class="exports">
+    <span class="exports__intitule">Exporter ce qui est affiché :</span>
+    <a class="bouton bouton--fantome" id="export-communications-csv"
+       href="/api/v1/export?quoi=communications&amp;format=csv" download>Communications · CSV</a>
+    <a class="bouton bouton--fantome" id="export-communications-json"
+       href="/api/v1/export?quoi=communications&amp;format=json" download>Communications · JSON</a>
+    <a class="bouton bouton--fantome" id="export-paquets-csv"
+       href="/api/v1/export?quoi=paquets&amp;format=csv" download>Paquets · CSV</a>
+    <a class="bouton bouton--fantome" id="export-detections-json"
+       href="/api/v1/export?quoi=detections&amp;format=json" download>Détections · JSON</a>
+  </div>
+  </section>
 
 {# Légende des couleurs. Elle réutilise les classes des pastilles réellement affichées :
    si une couleur change dans la feuille de style, la légende change avec elle. Une
@@ -234,6 +248,20 @@
     </div>
   </section>
 
+  {# Détail d'un paquet : les couches avec leur rôle, puis les octets reconstruits. #}
+  <div class="paquet-detail" id="paquet-detail" hidden>
+    <div class="detail-entete">
+      <h3 id="paquet-detail-titre">Détail du paquet</h3>
+      <button type="button" class="bouton bouton--fantome" id="paquet-detail-fermer">Fermer</button>
+    </div>
+    <p class="aide" id="paquet-detail-resume"></p>
+    <h4 class="couches-titre">Les couches, de la plus basse à la plus haute</h4>
+    <div id="paquet-couches"></div>
+    <h4 class="couches-titre">Octets des en-têtes</h4>
+    <p class="aide" id="paquet-hex-avertissement"></p>
+    <pre class="hex" id="paquet-hex"></pre>
+  </div>
+
   <section aria-labelledby="titre-paquets">
     <div class="titre-section--ligne">
       <h2 id="titre-paquets" class="titre-section">Packets</h2>
@@ -353,7 +381,10 @@
     <td class="col-port"></td>
     <td class="col-taille"></td>
     <td class="col-ttl"></td>
-    <td class="col-detail"></td>
+    <td class="col-detail">
+      <span class="col-detail-texte"></span>
+      <button type="button" class="bouton bouton--fantome bouton-couches">Couches</button>
+    </td>
   </tr>
 </template>
 

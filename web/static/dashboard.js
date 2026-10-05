@@ -164,7 +164,10 @@
       ligne.querySelector(".col-ttl").textContent =
         paquet.ttl !== null && paquet.ttl !== undefined ? String(paquet.ttl) : "—";
 
-      const detail = ligne.querySelector(".col-detail");
+      // Le texte du détail va dans un élément **interne** à la cellule : la cellule porte
+      // aussi le bouton « Couches ». Écrire dans la cellule remplacerait le bouton, et
+      // c'est exactement ce qui se passait.
+      const detail = ligne.querySelector(".col-detail-texte") || ligne.querySelector(".col-detail");
       detail.textContent = detailLisible(paquet);
       if (paquet.analyse_partielle) {
         detail.textContent = "analyse partielle — " + (paquet.motif_partiel || "cause inconnue");
@@ -218,6 +221,11 @@
 
   /* ------------------------------------------------------------ chargement */
 
+  //: Liste affichée, dans l'ordre du tableau. Le détail d'un paquet a besoin de retrouver
+  //: la fiche correspondant à la ligne cliquée : les identifiants n'existent pas en
+  //: mémoire, et lire le texte des cellules serait plus fragile que de garder la source.
+  window.paquetsAffiches = [];
+
   async function charger() {
     if (enVol) return;                    // règle 1 : une seule requête en vol
     enVol = true;
@@ -241,7 +249,10 @@
       majRepartition(el.repartition,
         Object.entries(stats.par_protocole || {}).map(([valeur, nombre]) => ({ valeur, nombre })));
       majRepartition(el.sources, stats.top_sources || []);
-      majTableau(donnees.paquets || []);
+      // On garde la source : le bouton « Couches » d'une ligne retrouvera ainsi sa fiche
+      // par sa position, sans dépendre du texte des cellules.
+      window.paquetsAffiches = donnees.paquets || [];
+      majTableau(window.paquetsAffiches);
       majSessions(donnees.sessions || []);
 
       majEtat("ok", `À jour · ${formaterNombre(donnees.affiches)} paquets affichés`);
@@ -869,4 +880,211 @@ function signalerCriteresEcartes(champs) {
     validerEtAppliquer();
     zone.champ.focus();
   });
+})();
+
+
+/* =============================================================================
+   Détail d'un paquet : les couches, leur rôle, et les octets des en-têtes
+   -----------------------------------------------------------------------------
+   Deux choses que cette vue ne fait pas, et qui sont écrites à l'écran :
+
+     - elle ne montre pas le paquet, elle montre **ce que l'analyseur en a compris**.
+       Aucun octet brut ne circule dans ce projet ; les octets affichés sont recalculés
+       à partir des champs analysés.
+     - elle laisse visibles les octets qu'elle ne sait pas reconstruire, sous la forme
+       « ?? ». Les combler par des zéros donnerait un affichage plus complet et faux.
+
+   Le savoir est côté serveur : la disposition des champs, leur largeur, l'explication
+   du rôle de chaque couche viennent de /api/v1/layers. Ici, on ne fait que mettre en
+   forme des valeurs déjà reçues.
+   ============================================================================= */
+(function () {
+  "use strict";
+
+  const zone = {
+    panneau: document.getElementById("paquet-detail"),
+    titre: document.getElementById("paquet-detail-titre"),
+    resume: document.getElementById("paquet-detail-resume"),
+    couches: document.getElementById("paquet-couches"),
+    avertissement: document.getElementById("paquet-hex-avertissement"),
+    hex: document.getElementById("paquet-hex"),
+    fermer: document.getElementById("paquet-detail-fermer"),
+  };
+  if (!zone.panneau) return;
+
+  let connaissance = null;
+  let paquetCourant = null;
+  let boutonOrigine = null;
+
+  // --------------------------------------------------------------- octets
+  function octetsDeMAC(valeur) {
+    const morceaux = String(valeur).split(":");
+    if (morceaux.length !== 6 || morceaux.some((m) => !/^[0-9a-fA-F]{2}$/.test(m))) return null;
+    return morceaux.map((m) => m.toLowerCase()).join(" ");
+  }
+
+  function octetsDeNombre(valeur, largeur) {
+    if (valeur === null || valeur === undefined || valeur === "") return null;
+    const nombre = Number(valeur);
+    if (!Number.isFinite(nombre) || nombre < 0) return null;
+    return nombre.toString(16).padStart(largeur * 2, "0").match(/../g).join(" ");
+  }
+
+  function octetsDAdresse(valeur) {
+    const texte = String(valeur);
+    // IPv4 : quatre nombres de 0 à 255. C'est le cas courant, et il est sans ambiguïté.
+    const morceaux = texte.split(".");
+    if (morceaux.length === 4 && morceaux.every((m) => /^\d{1,3}$/.test(m) && +m <= 255)) {
+      return morceaux.map((m) => (+m).toString(16).padStart(2, "0")).join(" ");
+    }
+    return null;                       // IPv6 : montré au-dessus, non recalculé ici
+  }
+
+  function octetsDuChamp(source, paquet) {
+    if (!source) return null;
+    const valeur = source === "details"
+      ? (paquet.details && Object.keys(paquet.details).length ? "…" : null)
+      : paquet[source];
+
+    if (source === "mac_source" || source === "mac_destination") return octetsDeMAC(valeur);
+    if (source === "ip_source" || source === "ip_destination") return octetsDAdresse(valeur);
+    if (source === "port_source" || source === "port_destination") return octetsDeNombre(valeur, 2);
+    if (source === "ttl") return octetsDeNombre(valeur, 1);
+    if (source === "taille") return octetsDeNombre(valeur, 2);
+    if (source === "version_ip") return valeur ? ("0" + valeur) : null;
+    if (source === "protocole") {
+      const numeros = { TCP: "06", UDP: "11", ICMP: "01", ICMPv6: "3a", ARP: "0806" };
+      const code = numeros[String(valeur)];
+      return code || null;
+    }
+    return null;
+  }
+
+  // --------------------------------------------------------------- rendu
+  function rendreCouches(paquet) {
+    zone.couches.textContent = "";
+    for (const couche of connaissance.couches) {
+      const bloc = document.createElement("section");
+      bloc.className = "couche";
+
+      const nom = document.createElement("h5");
+      nom.className = "couche__nom";
+      nom.textContent = couche.nom;
+      bloc.appendChild(nom);
+
+      const role = document.createElement("p");
+      role.className = "couche__role";
+      role.textContent = couche.role;
+      bloc.appendChild(role);
+
+      const liste = document.createElement("ul");
+      liste.className = "couche__champs";
+      for (const champ of couche.champs) {
+        const item = document.createElement("li");
+
+        const intitule = document.createElement("span");
+        intitule.className = "couche__champ";
+        intitule.textContent = champ.libelle;
+        item.appendChild(intitule);
+
+        const valeur = document.createElement("span");
+        const brut = champ.source === "details"
+          ? (paquet.details && paquet.details.dns_question ? paquet.details.dns_question : "")
+          : (champ.source ? paquet[champ.source] : "");
+        if (brut === null || brut === undefined || brut === "" || !champ.source) {
+          valeur.className = "couche__valeur couche__valeur--absente";
+          valeur.textContent = "non extrait";
+        } else {
+          valeur.className = "couche__valeur";
+          valeur.textContent = String(brut);
+        }
+        item.appendChild(valeur);
+        liste.appendChild(item);
+      }
+      bloc.appendChild(liste);
+      zone.couches.appendChild(bloc);
+    }
+  }
+
+  function rendreHex(paquet) {
+    const lignes = [];
+    for (const couche of connaissance.couches) {
+      lignes.push(`--- ${couche.nom} ---`);
+      for (const champ of couche.champs) {
+        const octets = octetsDuChamp(champ.source, paquet);
+        const placement = octets || "??".padEnd(11, "?");
+        lignes.push(`${champ.libelle.padEnd(30, " ")} ${placement}`);
+      }
+    }
+    zone.hex.textContent = lignes.join("\n");
+  }
+
+  async function ouvrir(paquet, bouton) {
+    if (!connaissance) {
+      try {
+        const reponse = await fetch("/api/v1/layers", { headers: { Accept: "application/json" } });
+        if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
+        connaissance = await reponse.json();
+      } catch (erreur) {
+        zone.panneau.hidden = false;
+        zone.titre.textContent = "Description des couches indisponible";
+        zone.resume.textContent = `La demande a échoué : ${erreur.message}`;
+        return;
+      }
+    }
+
+    paquetCourant = paquet;
+    zone.titre.textContent = `Paquet ${paquet.protocole || ""} — `
+      + `${paquet.ip_source || "?"} → ${paquet.ip_destination || "?"}`;
+    zone.resume.textContent = `${paquet.taille || "?"} octets · TTL ${paquet.ttl ?? "?"}`
+      + (paquet.flags_tcp ? ` · indicateurs ${paquet.flags_tcp}` : "")
+      + (paquet.analyse_partielle ? " · analyse partielle, voir le motif ci-dessus" : "");
+    zone.avertissement.textContent = connaissance.avertissement_hex;
+
+    rendreCouches(paquet);
+    rendreHex(paquet);
+    zone.panneau.hidden = false;
+    boutonOrigine = bouton;
+    zone.fermer.focus();
+  }
+
+  function fermer() {
+    zone.panneau.hidden = true;
+    if (boutonOrigine) { boutonOrigine.focus(); boutonOrigine = null; }
+  }
+
+  // Les lignes du tableau des paquets sont reconstruites à chaque rafraîchissement : on
+  // garde le paquet en mémoire au moment du clic, et non un élément du document.
+  document.addEventListener("click", (evenement) => {
+    const bouton = evenement.target.closest(".bouton-couches");
+    if (!bouton) return;
+    const ligne = bouton.closest("tr");
+    const index = ligne && ligne.parentElement ? [...ligne.parentElement.children].indexOf(ligne) : -1;
+    const paquet = window.paquetsAffiches ? window.paquetsAffiches[index] : null;
+    if (paquet) ouvrir(paquet, bouton);
+  });
+
+  zone.fermer.addEventListener("click", fermer);
+  document.addEventListener("keydown", (evenement) => {
+    if (evenement.key === "Escape" && !zone.panneau.hidden) fermer();
+  });
+})();
+
+/* Les liens d'export suivent le filtre courant : on exporte ce que l'on voit. */
+(function () {
+  "use strict";
+  const liens = [...document.querySelectorAll(".exports a")];
+
+  function mettreAJour() {
+    const filtre = window.filtreAffichage
+      ? `&filtre=${encodeURIComponent(window.filtreAffichage)}` : "";
+    for (const lien of liens) lien.href = lien.dataset.base || lien.href.split("&filtre=")[0];
+    for (const lien of liens) {
+      lien.dataset.base = lien.href;
+      if (filtre) lien.href += filtre;
+    }
+  }
+
+  document.addEventListener("filtre-change", mettreAJour);
+  mettreAJour();
 })();

@@ -1,9 +1,10 @@
 # Intelligent Network Packet Analyzer
 
-> **État : projet complet — les cinq phases sont livrées.** Capture réelle, analyse des
-> paquets, communications avec déduction d'état, explications en langage humain,
-> détection sur trois niveaux, enrichissement par API externe, mode replay `.pcap`, et
-> persistance PostgreSQL (donc Supabase). — le README est mis à jour à chaque phase, et la
+> **État : projet complet — les cinq phases sont livrées, et le lot A d'améliorations
+> (filtres d'affichage, légende, vue par couche, export) les rejoint.** Capture réelle,
+> analyse des paquets, communications avec déduction d'état, explications en langage
+> humain, détection sur trois niveaux, enrichissement par API externe, mode replay
+> `.pcap`, persistance PostgreSQL (donc Supabase). — le README est mis à jour à chaque phase, et la
 > section « Limites » dit exactement ce qui n'existe pas encore.
 
 Capturer le trafic réseau, le structurer, le comprendre, et l'expliquer à quelqu'un qui
@@ -128,6 +129,8 @@ pour la phase 1.
 | `GET` | `/api/v1/flows/explications` | public | toutes les explications d'une communication (`cle`, `reformuler`) |
 | `GET` | `/api/v1/alerts` | public | détections, filtrables (`niveau`, `session`) |
 | `GET` | `/api/v1/enrichment` | public | contexte externe d'une adresse (`ip`) |
+| `GET` | `/api/v1/layers` | public | les couches réseau et leur rôle |
+| `GET` | `/api/v1/export` | public | export CSV ou JSON (`quoi`, `format`, `filtre`) |
 | `GET` | `/api/v1/stats` | public | compteurs, répartitions, classements |
 | `GET` | `/api/v1/sessions` | public | sessions de capture reçues |
 | `GET` | `/api/v1/health` | public | état du service |
@@ -275,6 +278,32 @@ connexions abandonnées.
 n'interroge que des adresses publiques — jamais 192.168.x, 10.x ou fe80::, qu'aucun service
 tiers ne peut renseigner et qui décriraient votre réseau local à un tiers.
 
+## Filtrer, détailler, exporter
+
+**Le filtre d'affichage** s'écrit `champ:valeur`, et plusieurs critères se cumulent :
+
+```
+proto:tcp          port:443           ip:192.168.1.        taille:>1000
+etat:"échec probable"    niveau:hypothèse    texte:example.com    session:abc-123
+```
+
+Il s'applique aux **trois listes** à la fois. Un champ qui n'a pas de sens dans une vue est
+écarté — `proto` ne dit rien d'une détection — et l'interface **l'annonce** : appliquer
+partiellement sans le dire ferait lire des résultats complets en croyant lire des résultats
+filtrés. Une expression incomprise est refusée par un 400 qui énumère les champs valides.
+
+**La légende** emploie les classes CSS des pastilles réellement affichées : elle ne peut pas
+se désynchroniser de ce qu'elle explique.
+
+**La vue d'un paquet** montre les couches de la plus basse à la plus haute, avec une phrase
+sur le rôle de chacune, puis les octets des en-têtes. Elle est **reconstruite** à partir des
+métadonnées — aucun octet brut ne circule dans ce projet — et les octets que l'analyseur
+n'extrait pas encore s'affichent `??`. Voir la section Limites.
+
+**L'export** produit un CSV lisible par un tableur français (marque d'encodage UTF-8,
+séparateur point-virgule) ou un JSON qui garde la structure. Le filtre courant s'applique :
+on exporte ce que l'on voit.
+
 ## La détection
 
 Huit règles, trois niveaux, et une règle de synthèse. Le vocabulaire des niveaux dit le
@@ -370,7 +399,7 @@ from backend.explain import explications     # toutes les explications applicabl
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**205 tests**, dont :
+**282 tests**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole
@@ -387,6 +416,15 @@ from backend.explain import explications     # toutes les explications applicabl
   cours de route (état incertain), expiration TCP et UDP, délais réglables ;
 - **API des communications** — refonte par clé au lieu de la duplication, filtres par état
   et par protocole, refus d'un total incohérent ;
+- **filtres d'affichage** — un champ inconnu est refusé avec la liste des champs valides,
+  une valeur hostile reste un paramètre (vérifié aussi contre un vrai PostgreSQL), un
+  critère sans objet dans une vue est écarté **et annoncé** ;
+- **export** — marque d'encodage présente, séparateur point-virgule, valeur contenant le
+  séparateur protégée, seules les colonnes déclarées sortent, export borné ;
+- **filtre de capture** — un filtre vide est valide, un filtre trop long ou contenant un
+  caractère de contrôle est refusé, et le message rappelle la syntaxe BPF ;
+- **couches** — chaque couche explique son rôle, l'ordre d'encapsulation est respecté, et
+  ce qui n'est pas extrait est déclaré comme tel ;
 - **replay** — le rejeu utilise les horodatages du fichier et non l'heure courante
   (sans quoi un fichier ancien produirait un rapport entièrement faux), deux rejeux
   donnent le même résultat, un paquet abîmé n'arrête pas la lecture, un fichier absent ou
@@ -417,6 +455,13 @@ Dix scénarios manuels, avec leur résultat attendu, sont décrits dans
 Rédigées honnêtement, comme demandé. **Aucune de ces limites n'est cachée par le code :
 ce qui n'est pas fait n'est pas simulé.**
 
+- **La vue des octets est reconstruite, donc partielle.** Les numéros de séquence et
+  d'acquittement, la fenêtre TCP et les sommes de contrôle ne sont pas extraits par
+  l'analyseur : la vue les affiche `??` plutôt que de les inventer. Les extraire est le
+  prérequis de la détection des retransmissions (lot C).
+- **Le filtre de capture masque définitivement** ce qu'il exclut : contrairement au filtre
+  d'affichage, rien ne peut le rattraper après coup. C'est pourquoi il est validé avant le
+  démarrage.
 - **Sous 400 px de large, la table des communications défile horizontalement** à
   l'intérieur de son cadre. Mesuré : 369 px de contenu pour 349 px de place à 380 px, soit
   20 px — le bouton « Expliquer » et son intitulé accessible. Le dépassement reste confiné

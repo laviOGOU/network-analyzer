@@ -38,6 +38,7 @@ RACINE = Path(__file__).resolve().parent.parent
 if str(RACINE) not in sys.path:
     sys.path.insert(0, str(RACINE))
 
+from agent import bpf as mod_bpf                  # noqa: E402
 from agent import capture as mod_capture          # noqa: E402
 from agent import detection as mod_detection      # noqa: E402
 from agent import replay as mod_replay            # noqa: E402
@@ -263,7 +264,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\n{erreur}\n")
             return 2
     else:
-        capteur = mod_capture.Capture(interface=interface, filtre=options.filtre,
+        # Le filtre de capture est validé **avant** de lancer la capture. Un filtre refusé
+        # après le démarrage laisserait croire à un réseau silencieux : on refuse avant,
+        # avec un message qui montre la syntaxe attendue.
+        try:
+            filtre_valide = mod_bpf.valider(options.filtre)
+        except mod_bpf.ErreurFiltreBPF as erreur:
+            print(f"\n{erreur}\n")
+            return 2
+        capteur = mod_capture.Capture(interface=interface, filtre=filtre_valide,
                                       sur_paquet=sur_paquet)
 
     print(f"\n{'Fichier' if options.pcap else 'Interface'} : {interface}")
