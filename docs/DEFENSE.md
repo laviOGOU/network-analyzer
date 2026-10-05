@@ -952,3 +952,107 @@ information qui explique ce qui se passe.
   mais se fiait à l'ordre des paquets fourni par l'appelant. Il fonctionnait avec un
   stockage et donnait le mauvais nom avec un autre. Il trie désormais lui-même, et le
   commentaire dit pourquoi.
+
+
+---
+
+# Lot B — Comprendre (suite et fin)
+
+## 1. Ce qui a été construit
+
+**DNS → connexion** (`backend/noms.py`, voir plus haut) : `api.telegram.org` au lieu d'une
+adresse nue.
+
+**Métadonnées TLS** (`agent/parser.py`) : le nom du serveur visé, extrait de l'extension SNI
+d'un ClientHello, et la version TLS annoncée. C'est **la seule** information lisible d'une
+session chiffrée, et l'outil explique pourquoi le reste ne l'est pas.
+
+**Sessions HTTP en clair** (`agent/parser.py`) : méthode, hôte, chemin, code de réponse. Ni
+`Authorization`, ni `Cookie`, ni corps de message — non pas masqués après coup, mais **jamais
+lus**.
+
+**Récit d'une conversation** (`backend/recit.py`, `GET /api/v1/flows/recit`) : la chronologie
+des événements — ouverture, acceptation, fermeture, rupture, avec leur délai — puis le récit
+en français, où **chaque phrase porte son genre**, `fait` ou `lecture`.
+
+    [FAIT]    À 14:16:02, 2001:42d8:...:49688 a engagé une conversation TCP avec 64:ff9b::5bd:a496:443.
+    [FAIT]    L'ouverture a été acceptée : la conversation a bien été établie dans les deux sens.
+    [FAIT]    6,3 ko ont été échangés : 2,0 ko dans un sens, 4,2 ko dans l'autre.
+    [LECTURE] Un RST peut signaler un port fermé, un logiciel qui coupe la connexion, ou un
+              intermédiaire réseau qui la refuse. Le paquet seul ne le dit pas.
+
+## 2. Pourquoi ces choix
+
+**Lire le moins possible.** Pour HTTP, la règle n'est pas de masquer les en-têtes sensibles,
+mais de **ne pas les extraire**. Ce qu'on ne lit pas ne peut pas fuir, et il n'y a pas de
+liste de champs sensibles à tenir à jour — donc pas de champ oublié dans cette liste. Les
+tests le vérifient sur un message contenant réellement un jeton : le mot est absent de tout
+ce qui est retenu.
+
+**La chronologie ne garde que les événements.** Quarante échanges de données ne racontent
+rien de plus que le premier ; les compter, si. Ne retenir que l'ouverture, l'acceptation et
+la fin rend le récit lisible sans jamais cacher l'essentiel.
+
+**Chaque phrase dit ce qu'elle est.** `fait` ou `lecture`. C'est la règle n°4 du projet
+appliquée à la phrase : un lecteur doit pouvoir dire, à chaque ligne, ce qui a été vu et ce
+qui a été pensé. Une phrase comme « c'est le profil d'une consultation » est une lecture, et
+elle est présentée comme telle.
+
+**L'ordre des conditions compte.** Un SYN observé interdit d'écrire que le début n'a pas été
+vu. La première version testait la certitude avant l'ouverture et pouvait se contredire dans
+la même page — c'est exactement ce que la vérification sur trafic réel a montré.
+
+## 3. Trois questions de défense
+
+**1. Vous dites que le HTTPS n'est pas déchiffré. Alors à quoi bon afficher le SNI ?**
+
+Parce que le SNI est en clair **par nécessité de fonctionnement** : avant de chiffrer, le
+client doit annoncer le nom du serveur qu'il veut joindre, sans quoi un hébergeur ne saurait
+pas quel certificat présenter. Ce nom suffit à répondre à « quel service cette machine
+contacte-t-elle ? », qui est la question du projet. Le contenu reste illisible, et l'outil
+l'explique plutôt que de le taire. Déchiffrer demanderait un proxy d'interception — une
+position d'homme du milieu, que ce projet refuse par principe.
+
+**2. Pourquoi ne pas stocker le corps des échanges HTTP ? C'est du clair, ce serait utile.**
+
+Parce qu'un outil qui stocke le contenu d'un échange en clair finit par stocker un mot de
+passe, un jeton ou une donnée personnelle — et il suffit d'une fois. Le projet conserve des
+**métadonnées** : qui parle à qui, quand, combien, par quel protocole. C'est ce qui permet de
+le déployer sur un réseau d'entreprise sans qu'il devienne lui-même un risque.
+
+**3. Votre récit est-il une analyse automatique ? Peut-on s'y fier ?**
+
+Il ne conclut rien seul. Le récit **relate** des faits mesurés — heures, volumes, drapeaux,
+états — et **sépare** explicitement les lectures, qui portent toujours leur critère (« plus de
+trois fois plus de données dans un sens ») et leur réserve (« cela ne veut pas dire qu'elle
+est encore ouverte »). Aucune phrase n'affirme une cause. Un RST est présenté avec ses causes
+possibles, pas avec une conclusion.
+
+## 4. Ce qui a été trouvé en vérifiant sur trafic réel
+
+Cette partie a produit **quatre défauts**, tous invisibles dans les tests, tous visibles sur
+des données réelles :
+
+- **`dns_adresse` et `dns_reponse_nom` jetés à l'ingestion** — la réduction des détails ne
+  gardait que huit clés, choisies avant que la fonctionnalité existe. Zéro communication
+  nommée au premier essai.
+- **Les drapeaux TCP sont une chaîne**, `"SYN, ACK"`, pas une liste. Le code les parcourait
+  comme une liste de caractères : aucun drapeau reconnu, chronologie vide, et un récit qui
+  affirmait « l'ouverture n'a pas été observée » alors qu'un SYN avait été vu. **Une
+  affirmation fausse**, le pire défaut possible dans un outil d'analyse.
+- **Trois noms de champs inventés** (`premier_vu`, `dernier_vu`, `octets_a` au lieu de
+  `debut`, `dernier_paquet`, `octets_a_vers_b`) : le récit ne pouvait ni dater ni peser une
+  conversation, et écrivait « à un moment non daté ».
+- **`int()` refuse les octets** — Scapy rend certains champs numériques en octets (`b"404"`),
+  donc le code de réponse HTTP n'était jamais lu.
+
+**La leçon, et elle vaut méthode : quatre fois de suite, un test qui forgeait lui-même la
+structure des données a validé un code qui ne pouvait pas fonctionner sur les vraies. Un test
+qui invente la forme des données ne teste que lui-même.** Les tests adoptent désormais la
+forme relevée sur une réponse réelle de l'API.
+
+## 5. Ce qui reste imparfait, et qui est écrit ici plutôt que caché
+
+La chronologie peut afficher **deux fois** une acceptation lorsque deux paquets portent le
+même horodatage : le dédoublonnage des événements répétés n'est pas encore fiable. C'est
+cosmétique — le récit reste juste — mais c'est faux, et c'est noté comme tel.

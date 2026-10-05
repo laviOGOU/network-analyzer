@@ -34,6 +34,7 @@ except ImportError:                                  # pragma: no cover
 from backend import export as mod_export
 from backend import filtres as mod_filtres
 from backend import noms as mod_noms
+from backend import recit as mod_recit
 from backend import filtres_sql as mod_filtres_sql
 from backend.dependances import obtenir_enrichissement, obtenir_stockage
 from backend.enrichment import Enrichissement
@@ -288,6 +289,52 @@ def lister_sessions(stockage: Annotated[Stockage, Depends(obtenir_stockage)]) ->
     """
     sessions = stockage.sessions()
     return {"sessions": sessions, "total": len(sessions)}
+
+
+@router.get("/flows/recit", summary="Récit d'une communication, en langage humain")
+def recit_communication(
+    stockage: Annotated[Stockage, Depends(obtenir_stockage)],
+    cle: Annotated[str, Query(max_length=256, description="Clé de la communication")],
+    session: Annotated[str | None, Query(max_length=64, description="Session, si la clé apparaît dans plusieurs")] = None,
+) -> dict[str, Any]:
+    """Raconte une conversation : sa chronologie, puis son récit.
+
+    La chronologie ne retient que les **événements** — ouverture, acceptation, fermeture,
+    rupture. Quarante échanges de données ne racontent rien de plus que le premier ; les
+    compter, si.
+
+    Chaque phrase du récit porte son genre, `fait` ou `lecture`. C'est la règle du projet
+    appliquée à la phrase : un lecteur doit pouvoir dire, à chaque ligne, ce qui a été
+    observé et ce qui a été interprété.
+    """
+    communication = stockage.communication(cle, session)
+    if communication is None:
+        raise HTTPException(status_code=404, detail="Communication inconnue")
+
+    # Les paquets de cette conversation : le couple (adresse, port) des deux extrémités doit
+    # correspondre, dans un sens ou dans l'autre. On lit une fenêtre bornée — la même que
+    # celle de l'index des noms — pour ne pas relire toute la base à chaque demande.
+    extremites = {
+        (communication.get("ip_a"), communication.get("port_a")),
+        (communication.get("ip_b"), communication.get("port_b")),
+    }
+    paquets = []
+    for paquet in stockage.paquets(limite=mod_noms.PAQUETS_RELUS):
+        if (paquet.get("ip_source"), paquet.get("port_source")) not in extremites:
+            continue
+        if (paquet.get("ip_destination"), paquet.get("port_destination")) not in extremites:
+            continue
+        paquets.append(paquet)
+
+    moments = mod_recit.chronologie(paquets)
+    nommee = mod_noms.nommer(communication, noms_connus(stockage))
+
+    return {
+        "communication": nommee,
+        "moments": moments,
+        "recit": mod_recit.raconter(nommee, moments),
+        "paquets_analyses": len(paquets),
+    }
 
 
 @router.get("/flows/explications", summary="Toutes les explications d'une communication")

@@ -270,6 +270,96 @@ def _applicatif(paquet: Any, fiche: dict[str, Any]) -> None:
     if _entier(getattr(dns, "rcode", 0)):
         fiche["details"]["dns_rcode"] = _entier(dns.rcode)
 
+    # TLS et HTTP sont lus à part, et après le DNS : ce sont des protocoles applicatifs
+    # distincts, et un paquet n'en porte qu'un. Chacun se protège de ses propres erreurs.
+    _applicatif_tls(paquet, fiche)
+    _applicatif_http(paquet, fiche)
+
+
+def _applicatif_tls(paquet: Any, fiche: dict[str, Any]) -> None:
+    """Extrait le nom du serveur visé depuis un ClientHello TLS — et rien d'autre.
+
+    C'est la seule information lisible d'une session chiffrée : avant de chiffrer, le
+    client annonce en clair le nom du serveur qu'il veut joindre (l'extension SNI), sans
+    quoi un hébergeur ne saurait pas quel certificat présenter.
+
+    Ce que ce module ne fait pas, et ne fera pas : déchiffrer quoi que ce soit. Le contenu
+    de la session — l'adresse visitée, les données échangées, tout ce qui suit le
+    handshake — reste illisible, et c'est le principe même de TLS. Un outil qui prétendrait
+    le contraire utiliserait un proxy d'interception, ce que ce projet s'interdit.
+    """
+    try:
+        from scapy.layers.tls.handshake import TLSClientHello
+    except ImportError:                                  # pragma: no cover
+        return
+
+    try:
+        if not paquet.haslayer(TLSClientHello):
+            return
+        client_hello = paquet[TLSClientHello]
+
+        # La version annoncée dit ce que le client sait faire, pas ce qui sera négocié.
+        version = getattr(client_hello, "version", None)
+        if version is not None:
+            fiche["details"]["tls_version"] = _tronquer(str(version), 20)
+
+        for extension in getattr(client_hello, "ext", []) or []:
+            noms = getattr(extension, "servernames", None)
+            if not noms:
+                continue
+            premier = noms[0] if isinstance(noms, (list, tuple)) and noms else noms
+            valeur = getattr(premier, "servername", None)
+            if valeur:
+                texte = valeur.decode("utf-8", "replace") if isinstance(valeur, bytes) else valeur
+                fiche["details"]["tls_sni"] = _tronquer(texte, 120)
+                break
+    except Exception as erreur:                          # noqa: BLE001
+        # Un ClientHello malformé ne doit pas faire échouer l'analyse du paquet.
+        fiche["details"]["tls_illisible"] = type(erreur).__name__
+
+
+def _applicatif_http(paquet: Any, fiche: dict[str, Any]) -> None:
+    """Extrait la méthode, l'hôte et le code de réponse du HTTP **en clair uniquement**.
+
+    Deux principes, et le second est le plus important :
+
+    **1. Seuls les en-têtes nécessaires sont lus.** `Authorization`, `Cookie`, les jetons
+    de session : ils ne sont jamais extraits, donc jamais conservés, donc jamais affichés.
+    Ce n'est pas un masquage après coup — c'est un choix de lecture. Ce qu'on ne lit pas ne
+    peut pas fuir.
+
+    **2. Rien du corps du message n'est conservé.** Ni le formulaire envoyé, ni la page
+    reçue. Un outil qui stockerait le contenu d'un échange HTTP en clair stockerait, un
+    jour ou l'autre, un mot de passe ou un jeton — et il suffirait d'une fois.
+    """
+    try:
+        from scapy.layers.http import HTTP, HTTPRequest, HTTPResponse
+    except ImportError:                                  # pragma: no cover
+        return
+
+    try:
+        if not paquet.haslayer(HTTP):
+            return
+
+        if paquet.haslayer(HTTPRequest):
+            requete = paquet[HTTPRequest]
+            methode = _texte(getattr(requete, "Method", None))
+            if methode is not None:
+                fiche["details"]["http_methode"] = _tronquer(methode, 16)
+            hote = _texte(getattr(requete, "Host", None))
+            if hote is not None:
+                fiche["details"]["http_hote"] = _tronquer(hote, 120)
+            chemin = _texte(getattr(requete, "Path", None))
+            if chemin is not None:
+                fiche["details"]["http_chemin"] = _tronquer(chemin, 200)
+        elif paquet.haslayer(HTTPResponse):
+            code = _entier(getattr(paquet[HTTPResponse], "Status_Code", None))
+            if code is not None:
+                fiche["details"]["http_code"] = code
+    except Exception as erreur:                          # noqa: BLE001
+        fiche["details"]["http_illisible"] = type(erreur).__name__
+
+
 
 def _enregistrements_dns(dns: Any, section: str) -> list:
     """Enregistrements d'une section DNS, **toujours** rendus sous forme de liste.
@@ -352,9 +442,16 @@ def _texte(valeur: Any) -> str | None:
 
 
 def _entier(valeur: Any) -> int | None:
-    """Entier, ou None si la valeur n'en est pas un."""
+    """Entier, ou None si la valeur n'en est pas un.
+
+    Scapy rend certains champs numériques en **octets** — `b"404"` pour un code de réponse
+    HTTP, par exemple. `int()` refuse les octets : sans ce décodage, la lecture semblait
+    fonctionner mais ne produisait rien, et l'interface affichait un vide sans explication.
+    """
     if valeur is None or isinstance(valeur, bool):
         return None
+    if isinstance(valeur, bytes):
+        valeur = valeur.decode("ascii", "replace").strip()
     try:
         return int(valeur)
     except (TypeError, ValueError):

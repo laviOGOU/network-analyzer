@@ -278,6 +278,34 @@ connexions abandonnées.
 n'interroge que des adresses publiques — jamais 192.168.x, 10.x ou fe80::, qu'aucun service
 tiers ne peut renseigner et qui décriraient votre réseau local à un tiers.
 
+## Raconter une conversation
+
+`GET /api/v1/flows/recit?cle=...` rend la **chronologie** des événements d'une conversation —
+ouverture, acceptation, fermeture, rupture, avec leur délai — puis son **récit** en français.
+
+    +   0.0 s  ouverture    demande d'ouverture (SYN)
+    + 0.108 s  acceptation  ouverture acceptée (SYN-ACK)
+    +  0.25 s  rupture      rupture brutale (RST)
+
+Chaque phrase du récit porte son **genre** : `fait` ou `lecture`. « 6,3 ko ont été
+échangés » est un fait ; « c'est le profil d'une consultation » est une lecture, présentée
+comme telle avec le critère qui l'a déclenchée. Un lecteur peut dire, à chaque ligne, ce qui
+a été observé et ce qui a été pensé.
+
+**L'incertitude est écrite, pas contournée.** Une conversation dont la capture n'a pas vu le
+début est annoncée comme telle, et la phrase « cela ne veut pas dire qu'elle est encore
+ouverte » accompagne tout état « en cours ».
+
+## Ce qu'on lit d'une session chiffrée
+
+Rien du contenu — et c'est le principe même de TLS. On lit ce qui est en clair par nécessité :
+le **nom du serveur visé** (extension SNI du ClientHello) et la **version TLS** annoncée. Cela
+suffit à répondre à « quel service cette machine contacte-t-elle ? ».
+
+Pour le HTTP **en clair** uniquement : méthode, hôte, chemin, code de réponse. Ni
+`Authorization`, ni `Cookie`, ni corps de message : ces en-têtes ne sont **pas lus**, donc ils
+ne peuvent pas être conservés.
+
 ## Nommer ce qu'on voit
 
 `93.184.216.34` ne dit rien à personne ; `api.telegram.org` se lit. Les noms viennent des
@@ -413,7 +441,7 @@ from backend.explain import explications     # toutes les explications applicabl
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**292 tests**, dont :
+**313 tests**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole
@@ -433,6 +461,14 @@ from backend.explain import explications     # toutes les explications applicabl
 - **filtres d'affichage** — un champ inconnu est refusé avec la liste des champs valides,
   une valeur hostile reste un paramètre (vérifié aussi contre un vrai PostgreSQL), un
   critère sans objet dans une vue est écarté **et annoncé** ;
+- **TLS et HTTP** — le SNI est extrait d'un ClientHello, la version TLS avec lui ; la
+  méthode, l'hôte, le chemin et le code de réponse d'un HTTP en clair le sont aussi ;
+- **un jeton réellement présent dans un en-tête `Authorization`** n'apparaît nulle part
+  dans ce qui est retenu, pas plus qu'un cookie de session : ces en-têtes ne sont **pas
+  lus**, et non masqués après coup ;
+- **le récit** — chaque phrase porte son genre (`fait` ou `lecture`), un SYN observé
+  interdit d'écrire que l'ouverture n'a pas été vue, et les drapeaux TCP sont reconnus
+  qu'ils arrivent en chaîne ou en liste ;
 - **noms de domaine** — l'index se construit depuis les réponses DNS observées, le nom
   le plus récent gagne (le module trie lui-même), un nom invraisemblable est écarté, et
   **l'adresse n'est jamais retirée** de la fiche ;
@@ -472,6 +508,12 @@ Dix scénarios manuels, avec leur résultat attendu, sont décrits dans
 Rédigées honnêtement, comme demandé. **Aucune de ces limites n'est cachée par le code :
 ce qui n'est pas fait n'est pas simulé.**
 
+- **Pas de déchiffrement TLS, aucun proxy d'interception.** Une session chiffrée ne livre que
+  son SNI et la version annoncée. Le contenu reste illisible — ce n'est pas une limite
+  technique à contourner, c'est la position du projet.
+- **Le corps des échanges HTTP n'est pas conservé**, même en clair : métadonnées seulement.
+- **La chronologie peut afficher deux fois une acceptation** lorsque deux paquets portent le
+  même horodatage — dédoublonnage des événements répétés encore imparfait.
 - **Les noms viennent uniquement du DNS observé.** Une adresse qui n'apparaît dans aucune
   réponse DNS de la fenêtre analysée reste sans nom — y compris une adresse jointe par
   adresse littérale. C'est une limite assumée : deviner demanderait une requête externe, ce
