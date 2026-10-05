@@ -1,9 +1,10 @@
 # Intelligent Network Packet Analyzer
 
-> **État : phase 2 sur 5.** Sont construits et vérifiés à ce jour : la capture réelle,
+> **État : phase 3 sur 5.** Sont construits et vérifiés à ce jour : la capture réelle,
 > l'analyse des paquets, le regroupement en communications avec déduction d'état, le
-> schéma de base de données, la transmission et l'affichage en direct.
-> Les explications, la détection, l'enrichissement et le branchement sur Supabase
+> schéma de base de données, la transmission, l'affichage en direct, et le **moteur
+> d'explication** qui traduit tout cela en phrases compréhensibles.
+> La détection, l'enrichissement et le branchement sur Supabase
 > arrivent dans les phases suivantes — le README est mis à jour à chaque phase, et la
 > section « Limites » dit exactement ce qui n'existe pas encore.
 
@@ -81,6 +82,9 @@ network-analyzer/
     storage.py          #   conservation (mémoire en phase 1, Supabase en phase 5)
     securite.py         #   jeton d'agent, limitation de débit
     dependances.py      #   ce que les routes reçoivent (remplaçable en test)
+    explain/
+      rules.py          #   moteur d'explication déterministe + base de connaissances
+      llm.py            #   couche IA facultative, avec repli automatique
   web/
     templates/          #   page du tableau de bord, page d'erreur
     static/             #   feuille de style, script
@@ -119,6 +123,7 @@ pour la phase 1.
 | `POST` | `/api/v1/ingest` | **jeton d'agent** | recevoir un lot de paquets |
 | `GET` | `/api/v1/packets` | public | derniers paquets, filtrables (`limite`, `protocole`, `session`, `recherche`) |
 | `GET` | `/api/v1/flows` | public | communications regroupées, filtrables (`etat`, `protocole`, `recherche`) |
+| `GET` | `/api/v1/flows/explications` | public | toutes les explications d'une communication (`cle`, `reformuler`) |
 | `GET` | `/api/v1/stats` | public | compteurs, répartitions, classements |
 | `GET` | `/api/v1/sessions` | public | sessions de capture reçues |
 | `GET` | `/api/v1/health` | public | état du service |
@@ -233,13 +238,65 @@ Options utiles : `--duree 30` (arrêt automatique), `--filtre "tcp or udp"` (fil
 > vous disposez d'une autorisation écrite. Capturer le trafic d'un réseau qui ne vous
 > appartient pas est illégal.
 
+## Les explications
+
+C'est la partie que l'énoncé désigne comme la plus importante : faire passer l'outil de
+« voici des paquets » à « voici ce qui se passe ».
+
+![Détail d'une communication](docs/captures-interface/02-detail.png)
+
+Chaque explication a **toujours** la même forme, et l'interface sépare visuellement ce qui
+a été mesuré de ce qui a été déduit :
+
+- **titre** — « Communication HTTPS probable »
+- **faits observés** — « Port de destination = 443 », chacun vérifiable dans les paquets
+- **interprétation** — ce qu'on en déduit, et pourquoi
+- **confiance** — faible, moyenne ou haute, alignée sur la certitude de l'observation
+- **en clair** — le texte destiné à un lecteur qui découvre le sujet
+
+**La règle qui tient tout le reste : aucun service n'est affirmé.** Le port 443 ne prouve
+pas HTTPS — c'est un consensus très fort, pas une preuve. L'outil écrit donc « généralement
+associé à », et un test l'exige. Un outil d'analyse qui affirme des choses fausses avec
+assurance cesse d'être consulté.
+
+**La couche IA est facultative et vient après les règles, jamais à leur place.** Un modèle
+de langage ne sait pas ce qui circule sur le réseau : interrogé seul, il produirait une
+réponse plausible et fausse. Les règles observent, l'IA reformule. Si aucune clé n'est
+configurée, si le service ne répond pas ou si la réponse contient un chiffre absent des
+faits, le texte des règles est utilisé — l'utilisateur obtient une explication complète
+dans tous les cas. L'interface indique la provenance : « règle déterministe » ou
+« reformulé par IA ».
+
+```python
+from backend.explain import expliquer        # une explication principale
+from backend.explain import explications     # toutes les explications applicables
+```
+
+**Ce qui a été construit**
+
+| Élément | Contenu |
+|---|---|
+| Base des services | 60 ports documentés — nom, usage, caractère sensible |
+| Base des protocoles | TCP, UDP, ICMP, ICMPv6, ARP, IP, et un cas « non reconnu » |
+| Règles | 8 règles nommées : `port_service_connu`, `dns_resolution`, `connexion_entrante`… |
+
+**Ce que les explications rendent visible** — et qui n'était pas lisible autrement :
+
+- **une connexion entrante depuis Internet** est distinguée d'une communication sortante ;
+- **une résolution DNS** est signalée comme l'information la plus sensible de l'outil : les
+  noms de domaine demandés révèlent les sites consultés, davantage que les adresses IP ;
+- **un service sensible** (SMB, RDP, Telnet) est signalé comme méritant attention, avec la
+  mention explicite que ce n'est pas un signe d'attaque ;
+- **l'incertitude est conservée** : un état déduit d'une capture commencée en cours de
+  route porte une confiance faible et dit ce qui manque.
+
 ## Tests
 
 ```bat
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**103 tests**, dont :
+**133 tests**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole
@@ -255,7 +312,12 @@ Options utiles : `--duree 30` (arrêt automatique), `--filtre "tcp or udp"` (fil
   complète puis état « établie », SYN sans réponse, RST, un seul FIN, conversation vue en
   cours de route (état incertain), expiration TCP et UDP, délais réglables ;
 - **API des communications** — refonte par clé au lieu de la duplication, filtres par état
-  et par protocole, refus d'un total incohérent.
+  et par protocole, refus d'un total incohérent ;
+- **explications** — structure toujours complète, absence de certitude sur un service
+  déduit d'un port, service sensible qui n'est pas présenté comme une attaque, confiance
+  alignée sur la certitude de l'observation, déterminisme (même entrée, même sortie),
+  aucune donnée hostile ne provoque d'erreur, couche IA absente ou en panne sans perte
+  d'explication, et **rejet d'une reformulation qui invente un chiffre**.
 
 Dix scénarios manuels, avec leur résultat attendu, sont décrits dans
 [`docs/SCENARIOS-TEST.md`](docs/SCENARIOS-TEST.md).
@@ -265,9 +327,16 @@ Dix scénarios manuels, avec leur résultat attendu, sont décrits dans
 Rédigées honnêtement, comme demandé. **Aucune de ces limites n'est cachée par le code :
 ce qui n'est pas fait n'est pas simulé.**
 
-- **Pas d'explication en langage humain** — « TCP 443 » est affiché, pas expliqué, et
-  l'état d'une communication est décrit en une phrase, pas encore accompagné d'une
-  explication structurée (titre, faits observés, interprétation, confiance). *Phase 3.*
+- **Sous 400 px de large, la table des communications défile horizontalement** à
+  l'intérieur de son cadre. Mesuré : 369 px de contenu pour 349 px de place à 380 px, soit
+  20 px — le bouton « Expliquer » et son intitulé accessible. Le dépassement reste confiné
+  au cadre : la page, elle, ne déborde jamais (0 px mesuré). Une disposition en fiches,
+  plus adaptée à cette largeur, reste à faire.
+- **La base de connaissances couvre 60 services.** Au-delà, l'outil l'annonce
+  honnêtement (« service non répertorié ») plutôt que d'inventer. C'est une limite de
+  couverture, pas de méthode.
+- **Les explications ne portent pas encore de détection.** Elles décrivent ce qui a été
+  observé ; elles ne signalent pas encore ce qui sortirait de l'ordinaire. *Phase 4.*
 - **Pas de détection** — un scan de ports est visible dans les données, mais rien ne le
   signale. *Phase 4.*
 - **Pas d'enrichissement** — aucune adresse n'est rattachée à un pays ou à une

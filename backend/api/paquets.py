@@ -13,9 +13,11 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.dependances import obtenir_stockage
+from backend.explain import llm
+from backend.explain import rules as moteur_explication
 from backend.storage import Stockage
 
 router = APIRouter(tags=["lecture"])
@@ -60,6 +62,21 @@ def lister_communications(
     """
     communications = stockage.communications(limite=limite, etat=etat, protocole=protocole,
                                              session=session, recherche=recherche)
+
+    # Une explication « de liste » accompagne chaque communication. Elle est volontairement
+    # générale — elle répond à « de quel genre de communication s'agit-il ? » — et mise en
+    # cache : la reformuler pour chacune des cent cinquante lignes affichées serait du
+    # travail perdu, puisque seules trois valeurs (protocole, port, état) la déterminent.
+    # L'explication complète, elle, tient compte des adresses, des volumes et du sens de
+    # l'échange : c'est celle que renvoie la route de détail.
+    for communication in communications:
+        port = communication.get("port_b") or communication.get("port_a")
+        communication["explication"] = moteur_explication.expliquer_resume(
+            communication.get("protocole") or "",
+            int(port) if port is not None else None,
+            communication.get("etat") or "",
+            bool(communication.get("etat_certain")),
+        )
     return {"communications": communications, "affichees": len(communications),
             "statistiques": stockage.statistiques()}
 
@@ -81,6 +98,39 @@ def lister_sessions(stockage: Annotated[Stockage, Depends(obtenir_stockage)]) ->
     return {"sessions": sessions, "total": len(sessions)}
 
 
+@router.get("/flows/explications", summary="Toutes les explications d'une communication")
+def explications_communication(
+    stockage: Annotated[Stockage, Depends(obtenir_stockage)],
+    cle: Annotated[str, Query(max_length=256, description="Clé de la communication")],
+    session: Annotated[str | None, Query(max_length=64, description="Session, si la clé apparaît dans plusieurs")] = None,
+    reformuler: Annotated[bool, Query(description="Confier la reformulation à la couche IA si elle est active")] = False,
+) -> dict[str, Any]:
+    """Rend le détail complet d'une communication : faits observés, interprétation, confiance.
+
+    La clé est passée en paramètre plutôt que dans le chemin : elle contient des caractères
+    qui n'ont pas leur place dans une adresse (le séparateur « | », les deux-points des
+    ports). La placer dans l'URL obligerait à l'encoder, puis à la décoder — une source de
+    bogues pour aucun bénéfice.
+
+    Le paramètre `reformuler` est explicite et vaut « faux » par défaut : confier une
+    explication à un service externe se demande, cela ne se subit pas.
+    """
+    communication = stockage.communication(cle, session)
+    if communication is None:
+        raise HTTPException(status_code=404, detail="Communication inconnue")
+
+    explications = moteur_explication.explications(communication)
+    if reformuler and llm.disponible():
+        explications = [llm.reformuler(explication) for explication in explications]
+
+    return {
+        "communication": communication,
+        "explications": explications,
+        "principale": explications[0] if explications else None,
+        "couche_ia": llm.etat(),
+    }
+
+
 @router.get("/health", summary="État du service — Health")
 def sante() -> dict[str, Any]:
     """Contrôle de disponibilité, utilisé par les hébergeurs et les scripts.
@@ -90,4 +140,11 @@ def sante() -> dict[str, Any]:
     """
     from backend.config import configuration
 
-    return {"etat": "ok", "environnement": configuration.env}
+    return {
+        "etat": "ok",
+        "environnement": configuration.env,
+        # L'état de la couche IA figure ici, et non dans une route séparée : c'est une
+        # information d'état du service, et l'interface la lit déjà à cet endroit.
+        "couche_ia": llm.etat(),
+        "base_de_connaissances": {"services": moteur_explication.services_connus()},
+    }

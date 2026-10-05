@@ -341,10 +341,16 @@
     vide: document.getElementById("communications-vide"),
     gabarit: document.getElementById("gabarit-communication"),
     filtre: document.getElementById("filtre-etat"),
+    detail: document.getElementById("detail-communication"),
+    detailTitre: document.getElementById("detail-titre"),
+    detailResume: document.getElementById("detail-resume"),
+    detailCorps: document.getElementById("detail-explications"),
+    detailFermer: document.getElementById("detail-fermer"),
   };
   if (!zone.corps || !zone.gabarit) return;
 
   let enVol = false;
+  let boutonOrigine = null;
 
   function formaterDuree(secondes) {
     if (secondes === null || secondes === undefined) return "—";
@@ -359,6 +365,16 @@
   }
 
   function rendre(communications) {
+    // Le tableau est reconstruit à chaque rafraîchissement — toutes les trois secondes. Si
+    // le focus se trouve sur l'un de ses boutons à cet instant, la reconstruction détruit
+    // l'élément et le navigateur renvoie le focus sur la page : un lecteur au clavier perd
+    // sa place sans rien avoir fait. On note donc où était le focus avant de reconstruire,
+    // et on l'y remet après.
+    const actif = document.activeElement;
+    const focusAvant = actif && actif.classList && actif.classList.contains("bouton-detail")
+      ? { cle: actif.dataset.cle, session: actif.dataset.session }
+      : null;
+
     zone.corps.textContent = "";
     if (!communications.length) {
       zone.vide.hidden = false;
@@ -389,11 +405,39 @@
       ligne.querySelector(".col-volume").textContent =
         `${formaterOctets(c.octets_a_vers_b)} → ${formaterOctets(c.octets_b_vers_a)}`;
       ligne.querySelector(".col-duree").textContent = formaterDuree(c.duree_secondes);
-      ligne.querySelector(".col-note").textContent = c.note_etat || "";
+      // La colonne « ce que l'on peut en dire » affiche le titre produit par le moteur
+      // d'explication — « Communication HTTPS probable » — plutôt que la note d'état, qui
+      // ne parle que de la connexion. La note reste accessible dans le détail et dans
+      // l'infobulle de la pastille.
+      const explication = c.explication || null;
+      const cellule = ligne.querySelector(".col-note");
+      cellule.textContent = explication
+        ? explication.titre
+        : (c.note_etat || "—");
+      if (c.note_etat) cellule.title = c.note_etat;
+
+      // La clé et la session voyagent avec la ligne, pas dans une variable globale : le
+      // tableau est reconstruit toutes les trois secondes, une variable globale désignerait
+      // vite une ligne qui n'existe plus.
+      const bouton = ligne.querySelector(".bouton-detail");
+      bouton.dataset.cle = c.cle || "";
+      bouton.dataset.session = c.session || "";
+      bouton.setAttribute("aria-label",
+        `Expliquer la communication entre ${c.ip_a} et ${c.ip_b}`);
 
       fragment.appendChild(ligne);
     }
     zone.corps.appendChild(fragment);
+
+    // Rendre le focus à la ligne qui l'avait, si elle est toujours affichée. Sans cela, le
+    // bouton cliqué « disparaît » sous les doigts de l'utilisateur au bout de trois
+    // secondes, et la touche Entrée n'a plus d'effet.
+    if (focusAvant) {
+      const cible = Array.from(zone.corps.querySelectorAll(".bouton-detail"))
+        .find((b) => b.dataset.cle === focusAvant.cle
+                  && b.dataset.session === focusAvant.session);
+      if (cible) cible.focus();
+    }
   }
 
   async function charger() {
@@ -414,6 +458,144 @@
       enVol = false;
     }
   }
+
+  /* ------------------------------------------------------------------ détail */
+
+  /** Construit un bloc « faits » ou « interprétation », avec son intitulé écrit. */
+  function bloc(intitule, contenu, classe) {
+    const enveloppe = document.createElement("div");
+    enveloppe.className = `bloc ${classe}`;
+
+    const titre = document.createElement("span");
+    titre.className = "bloc-intitule";
+    titre.textContent = intitule;
+    enveloppe.appendChild(titre);
+
+    if (Array.isArray(contenu)) {
+      // Une liste de faits : chacun est un élément vérifiable.
+      const liste = document.createElement("ul");
+      for (const element of contenu) {
+        const item = document.createElement("li");
+        item.textContent = element;
+        liste.appendChild(item);
+      }
+      enveloppe.appendChild(liste);
+    } else {
+      const paragraphe = document.createElement("p");
+      paragraphe.textContent = contenu;
+      enveloppe.appendChild(paragraphe);
+    }
+    return enveloppe;
+  }
+
+  function rendreDetail(donnees) {
+    zone.detailCorps.textContent = "";
+
+    const communication = donnees.communication || {};
+    zone.detailTitre.textContent = `Communication ${communication.protocole || ""} — `
+      + `${extremite(communication.ip_a, communication.port_a)} vers `
+      + `${extremite(communication.ip_b, communication.port_b)}`;
+
+    const duree = formaterDuree(communication.duree_secondes);
+    zone.detailResume.textContent =
+      `État : ${communication.etat || "inconnu"}`
+      + (communication.etat_certain ? " (observé)" : " (déduit)")
+      + ` · ${communication.paquets_total || 0} paquets · `
+      + `${formaterOctets(communication.octets_total || 0)} · durée ${duree}`;
+
+    for (const explication of donnees.explications || []) {
+      const enveloppe = document.createElement("div");
+      enveloppe.className = "explication";
+
+      const titre = document.createElement("h4");
+      titre.className = "explication-titre";
+      titre.appendChild(document.createTextNode(explication.titre));
+
+      const confiance = document.createElement("span");
+      confiance.className = `etiquette etiquette--${explication.confiance}`;
+      confiance.textContent = `confiance ${explication.confiance}`;
+      titre.appendChild(confiance);
+
+      // Dire d'où vient la phrase : d'une règle écrite, ou d'un modèle qui l'a reformulée.
+      const source = document.createElement("span");
+      source.className = "etiquette etiquette--source";
+      source.textContent = explication.source === "ia" ? "reformulé par IA" : "règle déterministe";
+      titre.appendChild(source);
+      enveloppe.appendChild(titre);
+
+      enveloppe.appendChild(bloc("Faits observés", explication.faits_observes || [], "bloc-faits"));
+      enveloppe.appendChild(bloc("Interprétation", explication.interpretation || "",
+                                 "bloc-interpretation"));
+      if (explication.explication_simple) {
+        enveloppe.appendChild(bloc("En clair", explication.explication_simple, "bloc-simple"));
+      }
+
+      zone.detailCorps.appendChild(enveloppe);
+    }
+
+    // Rappel systématique : c'est la phrase qui protège le lecteur d'une conclusion trop
+    // rapide, et elle doit être présente même quand la confiance est haute.
+    const rappel = document.createElement("p");
+    rappel.className = "jamais-certain";
+    rappel.textContent = "Identifications de services déduites du numéro de port : "
+      + "probables, jamais certaines. Cet outil n'analyse pas le contenu chiffré.";
+    zone.detailCorps.appendChild(rappel);
+  }
+
+  async function ouvrirDetail(bouton) {
+    const parametres = new URLSearchParams({ cle: bouton.dataset.cle });
+    if (bouton.dataset.session) parametres.set("session", bouton.dataset.session);
+
+    bouton.disabled = true;
+    try {
+      const reponse = await fetch(`/api/v1/flows/explications?${parametres}`,
+                                  { headers: { Accept: "application/json" } });
+      if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
+      rendreDetail(await reponse.json());
+      zone.detail.hidden = false;
+      // On mémorise les identifiants de la ligne, **pas l'élément** : le tableau est
+      // reconstruit toutes les trois secondes, et l'élément mémorisé serait détaché du
+      // document au moment de rendre le focus — sur lequel focus() est alors sans effet.
+      boutonOrigine = { cle: bouton.dataset.cle, session: bouton.dataset.session };
+      // Le focus suit l'ouverture : sinon, un lecteur au clavier ne saurait pas que quelque
+      // chose s'est affiché, et devrait parcourir la page entière pour le trouver.
+      zone.detailFermer.focus();
+    } catch (erreur) {
+      zone.detail.hidden = false;
+      zone.detailTitre.textContent = "Explication indisponible";
+      zone.detailCorps.textContent = "";
+      zone.detailResume.textContent = `La demande a échoué : ${erreur.message}`;
+      zone.detailFermer.focus();
+    } finally {
+      bouton.disabled = false;
+    }
+  }
+
+  function fermerDetail() {
+    zone.detail.hidden = true;
+    if (!boutonOrigine) return;
+
+    const origine = boutonOrigine;
+    boutonOrigine = null;
+
+    // On retrouve le bouton de la même ligne dans la table telle qu'elle est maintenant.
+    const cible = Array.from(document.querySelectorAll(".bouton-detail"))
+      .find((b) => b.dataset.cle === origine.cle && b.dataset.session === origine.session);
+
+    // Si la communication a disparu du tableau entre-temps, le focus va sur le filtre :
+    // jamais nulle part, sinon un lecteur au clavier repart du début de la page.
+    (cible || zone.filtre).focus();
+  }
+
+  zone.corps.addEventListener("click", (evenement) => {
+    const bouton = evenement.target.closest(".bouton-detail");
+    if (bouton) ouvrirDetail(bouton);
+  });
+
+  zone.detailFermer.addEventListener("click", fermerDetail);
+  document.addEventListener("keydown", (evenement) => {
+    if (evenement.key === "Escape" && !zone.detail.hidden) fermerDetail();
+  });
 
   zone.filtre.addEventListener("change", charger);
   charger();

@@ -116,6 +116,7 @@
             <th scope="col">Octets ↔</th>
             <th scope="col">Durée</th>
             <th scope="col">Ce que l'on peut en dire</th>
+            <th scope="col"><span class="sr-only">Détail de l'explication</span></th>
           </tr>
         </thead>
         <tbody id="corps-communications"></tbody>
@@ -124,6 +125,20 @@
     <p class="vide" id="communications-vide" hidden>
       Aucune communication pour l'instant. Elles apparaissent dès que l'agent transmet.
     </p>
+
+    {# Le détail sépare volontairement les faits observés de l'interprétation. C'est
+       l'exigence du sujet, et elle est juste : sans cette séparation, un lecteur ne peut
+       pas savoir ce qui a été mesuré et ce qui a été déduit. #}
+    <div class="detail" id="detail-communication" hidden>
+      <div class="detail-entete">
+        <h3 id="detail-titre">Détail de la communication</h3>
+        <button type="button" class="bouton bouton-discret" id="detail-fermer">
+          Fermer
+        </button>
+      </div>
+      <p class="detail-resume mono-cellule" id="detail-resume"></p>
+      <div id="detail-explications"></div>
+    </div>
   </section>
 
   <section aria-labelledby="titre-paquets">
@@ -183,9 +198,9 @@
 </main>
 
 <footer class="pied">
-  <p>Exercice de formation — analyse de trafic réseau. L'enrichissement, les
-     communications (flows), la détection et les explications arrivent dans les phases
-     suivantes.</p>
+  <p>Exercice de formation — analyse de trafic réseau. Les explications sont produites par
+     un moteur de règles déterministe : les mêmes paquets donnent toujours les mêmes
+     phrases. La détection et l'enrichissement arrivent dans les phases suivantes.</p>
 </footer>
 
 {# Mise en forme d'une ligne de paquet, recopiée par le JavaScript. #}
@@ -201,6 +216,11 @@
     <td class="mono-cellule col-volume"></td>
     <td class="mono-cellule col-duree"></td>
     <td class="col-note"></td>
+    <td>
+      <button type="button" class="bouton bouton-discret bouton-detail">
+        Expliquer
+      </button>
+    </td>
   </tr>
 </template>
 

@@ -1,4 +1,228 @@
 /* =============================================================================
+   Table des communications — un tableau qui tient dans son cadre
+   -----------------------------------------------------------------------------
+   Mesuré avant correction : 1691 px de contenu pour 1374 px de place à 1440 px de
+   large, soit 317 px de débordement — la dernière colonne était hors de l'écran. La
+   cause : deux colonnes d'adresses IPv6 prenant 385 px chacune, dimensionnées sur la
+   plus longue adresse possible.
+
+   Avec une disposition fixe et des largeurs en pourcentage, le tableau ne peut plus
+   dépasser son cadre : il rétrécit, et les adresses se replient sur deux lignes. Une
+   adresse coupée en deux se lit moins bien qu'une adresse sur une ligne, mais elle se
+   lit — une colonne hors de l'écran ne se lit pas du tout.
+
+   Les colonnes les moins décisives disparaissent ensuite par paliers, pour que les
+   quatre essentielles — état, protocole, les deux extrémités — ne soient jamais
+   comprimées : durée d'abord, puis volumes, puis compteurs.
+   ============================================================================= */
+
+#tableau-communications {
+  table-layout: fixed;
+  width: 100%;
+}
+
+#tableau-communications th:nth-child(1) { width: 7%; }   /* État */
+#tableau-communications th:nth-child(2) { width: 8%; }   /* Protocole */
+#tableau-communications th:nth-child(3) { width: 17%; }  /* Extrémité A */
+#tableau-communications th:nth-child(4) { width: 17%; }  /* Extrémité B */
+#tableau-communications th:nth-child(5) { width: 8%; }   /* Paquets */
+#tableau-communications th:nth-child(6) { width: 11%; }  /* Octets */
+#tableau-communications th:nth-child(7) { width: 7%; }   /* Durée */
+#tableau-communications th:nth-child(8) { width: 18%; }  /* Ce que l'on peut en dire */
+#tableau-communications th:nth-child(9) { width: 7%; }   /* Détail */
+
+/* Les cellules se replient au lieu de pousser la colonne.
+   Le sélecteur porte l'identifiant du tableau, et non la seule classe : la règle
+   `.mono-cellule` interdit le retour à la ligne, et elle est déclarée plus bas dans cette
+   feuille. Sans cette spécificité, la règle serait sans effet — mesuré : 139 px de contenu
+   dans 84 px de colonne à 380 px de large. */
+#tableau-communications td,
+#tableau-communications td.mono-cellule {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Les pastilles aussi, sinon « échec probable » refuse de se replier et impose sa
+   largeur à la colonne. */
+#tableau-communications .pastille-etat,
+#tableau-communications .pastille-protocole {
+  white-space: normal;
+  text-align: center;
+}
+
+@media (max-width: 1100px) {
+  #tableau-communications th:nth-child(7),
+  #tableau-communications td:nth-child(7) { display: none; }
+  #tableau-communications th:nth-child(3),
+  #tableau-communications th:nth-child(4) { width: 20%; }
+  #tableau-communications th:nth-child(8) { width: 22%; }
+}
+
+@media (max-width: 900px) {
+  #tableau-communications th:nth-child(6),
+  #tableau-communications td:nth-child(6) { display: none; }
+  #tableau-communications th:nth-child(3),
+  #tableau-communications th:nth-child(4) { width: 21%; }
+  #tableau-communications th:nth-child(8) { width: 24%; }
+}
+
+@media (max-width: 760px) {
+  #tableau-communications th:nth-child(5),
+  #tableau-communications td:nth-child(5) { display: none; }
+  #tableau-communications th:nth-child(1) { width: 12%; }
+  #tableau-communications th:nth-child(2) { width: 13%; }
+  #tableau-communications th:nth-child(3),
+  #tableau-communications th:nth-child(4) { width: 27%; }
+  #tableau-communications th:nth-child(8) { width: 14%; }
+  #tableau-communications th:nth-child(9) { width: 7%; }
+
+  /* Le bouton ne garde que sa flèche. Son intitulé accessible reste porté par
+     l'attribut aria-label, posé par le JavaScript : un lecteur d'écran annonce donc
+     toujours « Expliquer la communication entre … », alors que l'écran, lui, gagne
+     91 px sur une largeur où ils sont comptés. */
+  .bouton-detail { font-size: 0; padding: .4rem .45rem; }
+  .bouton-detail::after { content: "→"; font-size: .95rem; }
+}
+
+@media (max-width: 460px) {
+  /* Dernier palier : les quatre colonnes essentielles se partagent la largeur, et les
+     pastilles se resserrent. Le mot le plus long à loger est « échec probable » — c'est
+     lui qui fixe la largeur minimale de la colonne d'état, et donc la limite basse. */
+  #tableau-communications th:nth-child(1) { width: 18%; }
+  #tableau-communications th:nth-child(2) { width: 15%; }
+  #tableau-communications th:nth-child(3),
+  #tableau-communications th:nth-child(4) { width: 26%; }
+  /* La colonne du bouton a besoin de 48 px pour sa flèche et son rembourrage : mesuré,
+     c'est elle qui fixait la largeur minimale du tableau à 380 px, et donc les 20 px de
+     débordement restants. On lui donne la place, et on resserre le bouton. */
+  #tableau-communications th:nth-child(9) { width: 15%; }
+  .bouton-detail { padding-left: .25rem; padding-right: .25rem; }
+
+  /* Le rembourrage des cellules compte autant que leur contenu : six colonnes à
+     1,5 rem de marge intérieure consomment près de 150 px, soit la moitié de l'écran
+     d'un téléphone. Mesuré avant ce réglage : 373 px de tableau pour 349 px de place. */
+  #tableau-communications th,
+  #tableau-communications td {
+    padding-left: .35rem;
+    padding-right: .35rem;
+  }
+
+  #tableau-communications .pastille-etat,
+  #tableau-communications .pastille-protocole {
+    font-size: .72rem;
+    padding: .2rem .35rem;
+  }
+}
+
+@media (max-width: 620px) {
+  /* Sur un téléphone, la colonne d'explication disparaît : le panneau de détail la
+     contient en entier, et les quatre colonnes essentielles gardent leur largeur. */
+  #tableau-communications th:nth-child(8),
+  #tableau-communications td:nth-child(8) { display: none; }
+  #tableau-communications th:nth-child(1) { width: 15%; }
+  #tableau-communications th:nth-child(2) { width: 16%; }
+  #tableau-communications th:nth-child(3),
+  #tableau-communications th:nth-child(4) { width: 31%; }
+  #tableau-communications th:nth-child(9) { width: 8%; }
+}
+
+/* =============================================================================
+   Détail d'une communication — faits observés contre interprétation
+   -----------------------------------------------------------------------------
+   Les deux blocs se distinguent par la couleur, par un libellé écrit, et par une
+   bordure latérale différente. Trois signaux plutôt qu'un : la couleur seule ne
+   suffirait pas pour un lecteur qui la distingue mal, et c'est justement la
+   distinction la plus importante de tout l'outil — ce qui a été mesuré d'un côté,
+   ce qui a été supposé de l'autre.
+   ============================================================================= */
+
+.detail {
+  margin-top: 1.25rem;
+  padding: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: var(--rayon);
+}
+
+.detail-entete {
+  display: flex; flex-wrap: wrap; gap: .75rem;
+  align-items: center; justify-content: space-between;
+  margin-bottom: .5rem;
+}
+
+.detail-entete h3 { margin: 0; font-size: 1.05rem; }
+
+.detail-resume {
+  color: var(--texte-doux);
+  font-size: .82rem;
+  margin: 0 0 1rem;
+  word-break: break-word;
+}
+
+.explication {
+  border-top: 1px solid var(--bord);
+  padding-top: 1rem;
+  margin-top: 1rem;
+}
+
+.explication:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+
+.explication-titre {
+  margin: 0 0 .6rem;
+  font-size: .98rem;
+  display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+}
+
+.bloc {
+  border-left: 3px solid var(--bord);
+  border-radius: 0 var(--rayon-petit) var(--rayon-petit) 0;
+  padding: .7rem .9rem;
+  margin-bottom: .6rem;
+}
+
+.bloc-faits { border-left-color: var(--accent); background: var(--accent-doux); }
+.bloc-interpretation { border-left-color: var(--attention); background: var(--surface-2); }
+.bloc-simple { border-left-color: var(--succes); background: var(--surface-2); }
+
+.bloc-intitule {
+  display: block;
+  font-size: .7rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--texte-faible);
+  margin-bottom: .35rem;
+}
+
+.bloc ul { margin: 0; padding-left: 1.1rem; }
+.bloc li { margin-bottom: .2rem; }
+.bloc p { margin: 0; }
+
+.etiquette {
+  font-size: .7rem;
+  padding: .15rem .5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.etiquette--haute { color: var(--succes); }
+.etiquette--moyenne { color: var(--attention); }
+.etiquette--faible { color: var(--texte-faible); }
+.etiquette--source { color: var(--texte-faible); }
+
+.jamais-certain {
+  font-size: .76rem;
+  color: var(--texte-faible);
+  margin: .5rem 0 0;
+}
+
+@media (max-width: 640px) {
+  .detail { padding: .9rem; }
+  .bloc { padding: .6rem .7rem; }
+}
+
+/* =============================================================================
    Tableau de bord — feuille de style
    -----------------------------------------------------------------------------
    Deux thèmes, un seul jeu de variables. Le thème par défaut suit le réglage du

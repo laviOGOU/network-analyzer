@@ -196,6 +196,23 @@ class Stockage:
 
         return list(reversed(paquets))[:max(0, limite)]
 
+    def communication(self, cle: str, session: str | None = None) -> dict[str, Any] | None:
+        """Retrouve une communication par sa clé.
+
+        La clé seule peut désigner plusieurs communications : la même conversation observée
+        par deux captures porte la même clé dans deux sessions différentes. Sans session
+        précisée, on rend la plus récemment vue — plutôt que la première trouvée, dont le
+        choix dépendrait de l'ordre interne du dictionnaire.
+        """
+        with self._verrou:
+            if session:
+                return self._communications.get(f"{session}|{cle}")
+            candidates = [c for index, c in self._communications.items()
+                          if index.endswith(f"|{cle}")]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda c: c.get("dernier_paquet") or "")
+
     def communications(self, limite: int = 100, etat: str | None = None,
                        protocole: str | None = None, session: str | None = None,
                        recherche: str | None = None) -> list[dict[str, Any]]:

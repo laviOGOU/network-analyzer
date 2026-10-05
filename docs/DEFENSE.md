@@ -373,3 +373,134 @@ Puis, sur trafic réel : lancer le backend et l'agent, et observer la section
 **Connections** du tableau de bord. Les pastilles en pointillés sont les états incertains —
 celles qu'il faut savoir expliquer.
 
+---
+
+# Phase 3 — Comprendre et expliquer
+
+## 1. Ce qui a été construit
+
+Le module que l'énoncé désigne comme le plus important : **`backend/explain/rules.py`**.
+
+| Élément | Contenu |
+|---|---|
+| Base des services | 60 ports documentés — nom, usage, et caractère sensible |
+| Base des protocoles | TCP, UDP, ICMP, ICMPv6, ARP, IP, et un cas « non reconnu » |
+| Base des états | les six états produits en phase 2, chacun expliqué en une phrase |
+| Règles | 8 règles, chacune portant un nom (`port_service_connu`, `dns_resolution`, `connexion_entrante`…) |
+
+Plus `backend/explain/llm.py` : la couche IA facultative, et l'interface qui affiche les
+explications en séparant les faits de l'interprétation.
+
+## 2. Pourquoi ces choix
+
+**La règle absolue : ne jamais présenter une hypothèse comme une certitude.** Le port 443
+ne prouve pas HTTPS — il existe un consensus très fort, mais rien n'interdit d'y faire
+tourner autre chose. Écrire « HTTPS » serait faux dans le principe, même en tombant juste
+neuf fois sur dix. On écrit donc « probablement HTTPS », et on écrit *pourquoi* on le pense.
+Un test vérifie cette propriété sur le texte produit : il exige le mot « probablement » et
+la mention qu'un port est une convention, pas une preuve.
+
+Ce choix a une conséquence assumée : l'outil paraît moins affirmatif qu'il pourrait l'être.
+C'est voulu. Un outil d'analyse qui affirme des choses fausses avec assurance cesse d'être
+consulté, et à juste titre.
+
+**La structure fixe.** Chaque explication a exactement cinq parties — titre, faits observés,
+interprétation, confiance, explication simple. Une seule fabrique (`_explication`) les
+produit toutes : la forme ne peut donc pas dériver au fil des ajouts. C'est cette structure
+qui permet à l'interface de séparer visuellement ce qui a été **mesuré** de ce qui a été
+**déduit** — la distinction la plus importante de tout l'outil.
+
+**L'ordre des règles décide de l'explication principale.** La première règle applicable
+devient « ce que l'on peut en dire ». Les règles précises passent donc avant les règles
+générales. Ce détail a été corrigé après observation : dans la première version, une
+requête DNS vers la box recevait pour toute explication « échange interne au réseau
+local » — vrai, et parfaitement inutile. La règle générale s'applique à tout, elle ne doit
+donc jamais masquer une règle précise.
+
+**L'IA vient après les règles, jamais à leur place.** Un modèle de langage ne connaît pas
+ce qui circule sur votre réseau : interrogé seul, il produirait une réponse plausible et
+fausse. Les règles observent, l'IA reformule. Trois garde-fous : elle n'est active que si
+une clé est configurée ; sa réponse est rejetée si elle contient un chiffre absent des
+faits ; et toute panne ramène au texte des règles sans erreur visible. Dans les trois cas
+de repli, l'utilisateur obtient une explication complète — seule la formulation change.
+
+**Le rappel de prudence est systématique.** Une phrase accompagne chaque détail affiché :
+« identifications déduites du numéro de port : probables, jamais certaines ». Elle est
+présente même quand la confiance est haute, parce que c'est précisément là qu'on l'oublie.
+
+## 3. Comment les fonctions communiquent
+
+    paquets (phase 1) → flows.py (phase 2) → une communication
+                                                  │
+                                                  ▼
+                                    explain/rules.py  ──► explications (structure fixe)
+                                                  │
+                                                  ▼
+                                    api/paquets.py  ──► /api/v1/flows (résumé, en cache)
+                                                        /api/v1/flows/explications (détail)
+                                                  │
+                                                  ▼
+                                    dashboard.js  ──► blocs « Faits observés » /
+                                                       « Interprétation » / « En clair »
+                                                  │
+                                          (facultatif, sur demande explicite)
+                                                  ▼
+                                    explain/llm.py  ──► reformulation, ou repli
+
+Un point sur les deux chemins d'explication : celui de la **liste** est mis en cache, parce
+qu'il ne dépend que de trois valeurs (protocole, port, état) et qu'il est calculé pour cent
+cinquante lignes toutes les trois secondes. Celui du **détail** tient compte des adresses,
+des volumes et du sens de l'échange — c'est le plus riche, et il n'est calculé qu'au clic.
+
+## 4. Cinq questions de défense
+
+**1. Pourquoi ne pas avoir confié les explications à un modèle de langage, qui écrit mieux ?**
+
+Parce qu'il ne sait pas ce qui circule sur le réseau. Sa réponse serait plausible et non
+fondée — exactement ce qu'un outil de sécurité ne doit pas produire. Ici, la
+responsabilité du contenu reste du côté vérifiable : les règles observent et produisent
+les faits, l'IA ne fait que reformuler, et sa sortie est rejetée si elle introduit un
+chiffre qui n'était pas dans les faits.
+
+**2. Le port 443, ce n'est pas HTTPS ?**
+
+Presque toujours, oui. Mais « presque toujours » n'est pas « toujours » : un port est une
+convention, pas une preuve. Rien n'empêche un service quelconque d'écouter sur 443. La
+phrase exacte de l'outil est « généralement associé à HTTPS », suivie de la raison, et le
+contenu échangé n'est pas analysé — c'est écrit dans l'interface.
+
+**3. Comment savez-vous que vos explications sont justes ?**
+
+Trois raisons. Le moteur est **déterministe** : les mêmes paquets produisent toujours les
+mêmes phrases, donc une explication peut être rejouée et comparée. Chaque phrase cite un
+**fait nommé** — « port de destination = 443 » — que n'importe qui peut vérifier dans les
+paquets. Et les tests vérifient des **propriétés** plutôt que des tournures : la présence
+du mot « probablement », la cohérence entre confiance et certitude de l'observation,
+l'absence de chiffre inventé. Un test qui vérifierait le texte exact casserait à la
+première reformulation, sans rien protéger.
+
+**4. Que se passe-t-il si une règle plante ?**
+
+Les autres restent appliquées, et l'incident est visible : une explication intitulée
+« Règle en échec » nomme la fonction fautive. Le principe est le même que celui du parseur
+en phase 1 : un élément fautif se signale, il n'emporte pas tout le reste. Sur un tableau
+de bord public, une case vide est un moindre mal ; une erreur cinq cents ne l'est pas.
+
+**5. Pourquoi l'ordre des règles est-il important ?**
+
+Parce que la première règle applicable devient l'explication principale. Une règle générale
+s'applique partout : placée en tête, elle masque tout le reste. C'est arrivé — une requête
+DNS vers la box s'affichait « échange interne au réseau local », ce qui est exact et
+n'apprend rien. Les règles précises passent donc avant, et un test verrouille cet ordre.
+
+## 5. Ce qui a été trouvé en écrivant cette phase
+
+- **Un manque dans la base de règles** : la situation « machine du réseau vers Internet »
+  n'était pas couverte — ni local-contre-local, ni public-contre-public. C'est pourtant le
+  trafic le plus fréquent qui existe. Le cas de la connexion entrante, plus rare et plus
+  intéressant, a été ajouté dans la même passe.
+- **Un défaut d'accessibilité réel** : le tableau se reconstruit toutes les trois secondes,
+  ce qui détruisait le bouton ayant le focus. Un lecteur au clavier perdait sa place sans
+  rien avoir fait. Le focus est désormais noté et restitué après chaque reconstruction, et
+  un test automatisé l'éprouve en laissant passer plus d'un cycle complet.
+- **Une incohérence typographique** : « 1.8 ko » à l'anglaise au milieu d'un texte français.
