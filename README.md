@@ -278,6 +278,20 @@ connexions abandonnées.
 n'interroge que des adresses publiques — jamais 192.168.x, 10.x ou fe80::, qu'aucun service
 tiers ne peut renseigner et qui décriraient votre réseau local à un tiers.
 
+## Nommer ce qu'on voit
+
+`93.184.216.34` ne dit rien à personne ; `api.telegram.org` se lit. Les noms viennent des
+**réponses DNS observées sur le réseau** — jamais d'un annuaire externe, jamais d'une
+requête émise pour nommer. Une machine a demandé « quelle adresse porte ce nom ? » ; la
+réponse contenait les deux, et l'outil la relit à l'envers.
+
+Sur la capture de démonstration : **26 communications sur 94** portent un nom, y compris
+sur des adresses IPv6 que personne ne lit.
+
+**L'adresse n'est jamais remplacée, seulement accompagnée.** Le nom est une commodité,
+l'adresse est le fait vérifiable. Une adresse partagée par plusieurs noms reçoit le plus
+récemment observé, et l'outil le dit « d'après le DNS ».
+
 ## Filtrer, détailler, exporter
 
 **Le filtre d'affichage** s'écrit `champ:valeur`, et plusieurs critères se cumulent :
@@ -399,7 +413,7 @@ from backend.explain import explications     # toutes les explications applicabl
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**282 tests**, dont :
+**292 tests**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole
@@ -419,6 +433,9 @@ from backend.explain import explications     # toutes les explications applicabl
 - **filtres d'affichage** — un champ inconnu est refusé avec la liste des champs valides,
   une valeur hostile reste un paramètre (vérifié aussi contre un vrai PostgreSQL), un
   critère sans objet dans une vue est écarté **et annoncé** ;
+- **noms de domaine** — l'index se construit depuis les réponses DNS observées, le nom
+  le plus récent gagne (le module trie lui-même), un nom invraisemblable est écarté, et
+  **l'adresse n'est jamais retirée** de la fiche ;
 - **export** — marque d'encodage présente, séparateur point-virgule, valeur contenant le
   séparateur protégée, seules les colonnes déclarées sortent, export borné ;
 - **filtre de capture** — un filtre vide est valide, un filtre trop long ou contenant un
@@ -455,6 +472,10 @@ Dix scénarios manuels, avec leur résultat attendu, sont décrits dans
 Rédigées honnêtement, comme demandé. **Aucune de ces limites n'est cachée par le code :
 ce qui n'est pas fait n'est pas simulé.**
 
+- **Les noms viennent uniquement du DNS observé.** Une adresse qui n'apparaît dans aucune
+  réponse DNS de la fenêtre analysée reste sans nom — y compris une adresse jointe par
+  adresse littérale. C'est une limite assumée : deviner demanderait une requête externe, ce
+  que le projet s'interdit.
 - **La vue des octets est reconstruite, donc partielle.** Les numéros de séquence et
   d'acquittement, la fenêtre TCP et les sommes de contrôle ne sont pas extraits par
   l'analyseur : la vue les affiche `??` plutôt que de les inventer. Les extraire est le

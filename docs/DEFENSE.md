@@ -872,3 +872,83 @@ l'exécution réelle de cinq tentatives contre PostgreSQL.
 - **Mon outil de vérification attendait des délais fixes**, et deux attentes impossibles
   (`waitForSelector` attend la visibilité : un élément caché ne peut jamais la satisfaire).
   Il attend désormais des états.
+
+
+---
+
+# Lot B — Comprendre (première partie : DNS → connexion)
+
+## 1. Ce qui a été construit
+
+`backend/noms.py` : relier une adresse IP au nom que le réseau lui a donné.
+
+    avants : 2001:42d8:379d:e500:e9a1:7431:a059:e96a:49687:443
+    après  : api.telegram.org
+
+Sur la capture de démonstration : **26 communications sur 94** portent désormais un nom.
+
+## 2. Pourquoi ces choix
+
+**Le nom vient du réseau observé, jamais d'un annuaire.** Avant de joindre un serveur, une
+machine demande « quelle adresse porte ce nom ? » ; la réponse contient le nom **et**
+l'adresse. Ces réponses sont déjà dans les paquets conservés — il suffit de les relire à
+l'envers. Aucune requête externe n'est émise, aucun annuaire n'est interrogé : le nom
+affiché est celui que la machine observée a réellement demandé.
+
+**L'adresse n'est jamais remplacée, seulement accompagnée.** Le nom est une commodité,
+l'adresse est le fait. Masquer l'adresse derrière un nom rendrait impossible la
+vérification de ce qui a été observé — et un outil d'analyse dont on ne peut pas vérifier
+les dires ne sert à rien. L'interface affiche le nom au-dessus, l'adresse dessous.
+
+**Un nom invraisemblable est écarté.** Un nom sans point n'est pas un nom de domaine ; une
+chaîne de mille caractères est un enregistrement détourné ou une donnée malformée ; un
+caractère de contrôle est une donnée hostile. Ces valeurs viennent du réseau : elles sont
+filtrées avant d'être affichées, jamais après.
+
+**Quand une adresse porte plusieurs noms, le plus récent gagne.** Les hébergeurs et les
+fermes de serveurs en portent des dizaines sur une même adresse. Le module **trie lui-même**
+au lieu de supposer que l'appelant l'a fait — voir ce qui a été trouvé ci-dessous.
+
+**Le cache est court — quinze secondes.** Reconstruire l'index à chaque rafraîchissement du
+tableau de bord ferait relire des milliers de paquets pour retrouver les mêmes noms. Trop
+long, il retarderait l'apparition d'un nom nouveau.
+
+## 3. Trois questions de défense
+
+**1. D'où viennent vos noms de domaine ? D'un service externe ?**
+
+Non, et c'est le point important. Ils viennent des réponses DNS observées sur le réseau
+lui-même : une machine demande « quelle adresse porte github.com ? », la réponse contient
+`github.com` et `140.82.121.4`, et c'est cette paire que l'outil réutilise. Aucune requête
+n'est émise vers l'extérieur pour nommer quoi que ce soit — pas même une résolution inverse.
+C'est ce qui permet à l'outil de fonctionner sur un réseau isolé.
+
+**2. Une adresse peut porter plusieurs noms. Lequel affichez-vous ?**
+
+Le plus récemment observé, et c'est un choix assumé : c'est celui qui a le plus de chances
+de correspondre au trafic en cours. L'interface ne prétend pas donner le nom « officiel » de
+l'adresse — elle dit « d'après le DNS », et l'adresse reste affichée dessous. Un lecteur qui
+veut vérifier regarde l'adresse, qui est le fait vérifiable.
+
+**3. Pourquoi ne pas avoir simplement fait une résolution inverse (PTR) ?**
+
+Parce qu'elle serait une requête émise vers l'extérieur — ce que le projet évite —, qu'elle
+échoue la plupart du temps sur les adresses partagées, et qu'elle donnerait un nom
+d'hébergeur, pas le nom demandé. La résolution inverse dit « cette adresse appartient à
+Amazon » ; le DNS observé dit « cette machine cherchait api.telegram.org ». C'est la seconde
+information qui explique ce qui se passe.
+
+## 4. Ce qui a été trouvé en écrivant cette partie
+
+- **La donnée nécessaire n'était pas conservée.** La réduction des détails à l'ingestion ne
+  gardait que huit clés, choisies **avant** que cette fonctionnalité existe : `dns_adresse`
+  et `dns_reponse_nom` étaient jetés à l'entrée. La fonctionnalité aurait paru « ne pas
+  marcher » alors que la donnée n'avait jamais été stockée. C'est ce que la vérification sur
+  trafic réel a montré — **0 communication nommée** au premier essai, sur une capture qui
+  contenait pourtant des résolutions DNS. La liste des clés a été élargie, et la limite
+  portée de huit à dix, en gardant le principe : ce qui vient du réseau ne doit pas pouvoir
+  faire grossir la base à volonté.
+- **Un ordre non garanti n'est pas un ordre.** L'index annonçait « le plus récent gagne »
+  mais se fiait à l'ordre des paquets fourni par l'appelant. Il fonctionnait avec un
+  stockage et donnait le mauvais nom avec un autre. Il trie désormais lui-même, et le
+  commentaire dit pourquoi.

@@ -378,6 +378,28 @@
     return port === null || port === undefined ? ip : `${ip}:${port}`;
   }
 
+  /**
+   * Remplit une cellule d'extrémité : le nom connu au-dessus, l'adresse toujours dessous.
+   *
+   * Le nom vient des réponses DNS observées sur ce réseau — jamais d'un annuaire externe.
+   * Il peut donc manquer, et il peut désigner un service partagé : c'est pourquoi il
+   * accompagne l'adresse au lieu de la remplacer.
+   */
+  function remplirExtremite(cellule, ip, port, nom) {
+    cellule.textContent = "";
+    if (nom) {
+      const ligneNom = document.createElement("span");
+      ligneNom.className = "nom-domaine";
+      ligneNom.textContent = nom;
+      ligneNom.title = "Nom relevé dans les réponses DNS observées sur ce réseau";
+      cellule.appendChild(ligneNom);
+    }
+    const ligneAdresse = document.createElement("span");
+    ligneAdresse.className = "mono-cellule";
+    ligneAdresse.textContent = extremite(ip, port);
+    cellule.appendChild(ligneAdresse);
+  }
+
   function rendre(communications) {
     // Le tableau est reconstruit à chaque rafraîchissement — toutes les trois secondes. Si
     // le focus se trouve sur l'un de ses boutons à cet instant, la reconstruction détruit
@@ -412,8 +434,12 @@
       protocole.textContent = c.protocole;
       protocole.dataset.protocole = c.protocole;
 
-      ligne.querySelector(".col-extremite-a").textContent = extremite(c.ip_a, c.port_a);
-      ligne.querySelector(".col-extremite-b").textContent = extremite(c.ip_b, c.port_b);
+      // Le nom de domaine est ajouté **au-dessus** de l'adresse, et l'adresse reste
+      // affichée. Le nom est une commodité — celui que la machine a réellement demandé au
+      // DNS ; l'adresse est le fait observé. Masquer l'adresse derrière un nom rendrait
+      // impossible la vérification de ce qui a été vu.
+      remplirExtremite(ligne.querySelector(".col-extremite-a"), c.ip_a, c.port_a, c.nom_a);
+      remplirExtremite(ligne.querySelector(".col-extremite-b"), c.ip_b, c.port_b, c.nom_b);
       ligne.querySelector(".col-echanges").textContent =
         `${c.paquets_a_vers_b} → ${c.paquets_b_vers_a}`;
       ligne.querySelector(".col-volume").textContent =

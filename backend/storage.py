@@ -30,7 +30,10 @@ from backend import filtres
 
 #: Taille du dictionnaire de détails conservé tel quel. Au-delà, on le tronque : ce qui
 #: compte pour l'observateur, ce sont les faits saillants, pas l'exhaustivité.
-MAX_DETAILS_CONSERVES = 8
+#: Nombre de clés de détail conservées par paquet. Borné, parce que ce qui vient du réseau
+#: ne doit pas pouvoir faire grossir la base à volonté — mais assez large pour porter ce
+#: dont les vues ont besoin, y compris les deux clés qui relient une adresse à son nom.
+MAX_DETAILS_CONSERVES = 10
 
 
 class Stockage:
@@ -378,8 +381,13 @@ def details_reduits(details: dict[str, Any]) -> dict[str, Any]:
     """Ne conserve que les détails les plus utiles, et borne leur nombre."""
     if not isinstance(details, dict):
         return {}
-    ordre = ("dns_question", "dns_type", "dns_reponse", "icmp_lisible", "type_icmp",
-             "operation_arp", "tronque", "type_ethernet")
+    # L'ordre compte : ce qui figure en tête est conservé en priorité si la limite est
+    # atteinte. Les deux clés `dns_adresse` et `dns_reponse_nom` ont été ajoutées après
+    # coup — sans elles, relier une adresse à son nom est impossible, et la fonctionnalité
+    # paraîtrait « ne pas marcher » alors que la donnée n'avait jamais été conservée.
+    # C'est le genre d'oubli qu'on ne voit qu'en regardant les données réelles.
+    ordre = ("dns_question", "dns_reponse_nom", "dns_adresse", "dns_type", "dns_reponse",
+             "icmp_lisible", "type_icmp", "operation_arp", "tronque", "type_ethernet")
     retenus: dict[str, Any] = {}
     for cle in ordre:
         if cle in details:

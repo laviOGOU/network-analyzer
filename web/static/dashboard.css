@@ -129,6 +129,15 @@
 
 .filtre-resume code { font-family: var(--mono); color: var(--texte); }
 
+/* Le nom de domaine relevé au DNS. Volontairement discret : il aide à lire, il ne
+   remplace pas l'adresse, qui reste la référence vérifiable. */
+.nom-domaine {
+  display: block;
+  color: var(--texte-doux);
+  font-size: .78rem;
+  overflow-wrap: anywhere;
+}
+
 .legende {
   background: var(--surface);
   border: 1px solid var(--bord);

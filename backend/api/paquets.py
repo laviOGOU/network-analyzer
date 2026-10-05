@@ -33,6 +33,7 @@ except ImportError:                                  # pragma: no cover
 
 from backend import export as mod_export
 from backend import filtres as mod_filtres
+from backend import noms as mod_noms
 from backend import filtres_sql as mod_filtres_sql
 from backend.dependances import obtenir_enrichissement, obtenir_stockage
 from backend.enrichment import Enrichissement
@@ -42,6 +43,17 @@ from backend.explain import rules as moteur_explication
 from backend.storage import Stockage
 
 router = APIRouter(tags=["lecture"])
+
+
+#: Index des noms de domaine, partagé par les routes et gardé quelques secondes.
+#: Le reconstruire à chaque rafraîchissement — toutes les trois secondes — ferait relire
+#: des milliers de paquets pour retrouver les mêmes noms.
+_cache_noms = mod_noms.CacheNoms()
+
+
+def noms_connus(stockage: Stockage) -> dict:
+    """Rend l'association adresse → nom, construite depuis les réponses DNS conservées."""
+    return _cache_noms.obtenir(lambda: stockage.paquets(limite=mod_noms.PAQUETS_RELUS))
 
 
 def criteres_du_filtre(filtre: str | None, table: str) -> tuple[list, list[str]]:
@@ -107,10 +119,16 @@ def lister_communications(
     affiché, pas seulement stocké : une communication vue en cours de route ne peut pas
     être présentée avec la même assurance qu'une ouverture observée en entier.
     """
+    noms = noms_connus(stockage)
     criteres, ignores = criteres_du_filtre(filtre, "communications")
     communications = stockage.communications(limite=limite, etat=etat, protocole=protocole,
                                              session=session, recherche=recherche,
                                              filtre=criteres)
+
+    # Chaque extrémité reçoit le nom que le DNS lui a donné, **en plus** de son adresse.
+    # L'adresse n'est jamais retirée : le nom est une commodité, l'adresse est le fait, et
+    # masquer l'adresse rendrait impossible la vérification de ce qui a été observé.
+    communications = [mod_noms.nommer(communication, noms) for communication in communications]
 
     # Une explication « de liste » accompagne chaque communication. Elle est volontairement
     # générale — elle répond à « de quel genre de communication s'agit-il ? » — et mise en
