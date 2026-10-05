@@ -178,6 +178,40 @@ class LotPaquets(BaseModel):
     communications: Annotated[list[Communication], Field(max_length=2000)] = Field(
         default_factory=list)
 
+    #: Détections produites par l'agent, refondues par (règle, cible) : la même détection
+    #: revue à chaque lot met à jour son compteur au lieu d'apparaître en double.
+    detections: Annotated[list[Detection], Field(max_length=500)] = Field(
+        default_factory=list)
+
+
+class Detection(BaseModel):
+    """Un comportement inhabituel repéré par l'agent.
+
+    La validation reprend exactement les contraintes du moteur de détection. C'est
+    volontaire : ce qui entre par le réseau est vérifié comme n'importe quelle donnée
+    hostile, même quand il vient d'un agent authentifié. Un agent compromis, ou une
+    version ancienne de l'agent, ne doit pas pouvoir écrire n'importe quoi.
+
+    Les trois niveaux sont limités à ceux qui existent. Un niveau inventé serait accepté
+    par le stockage et invisible dans l'interface : la détection disparaîtrait sans que
+    personne ne s'en aperçoive.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    regle: Annotated[str, Field(min_length=1, max_length=64)]
+    famille: Annotated[str, Field(max_length=64)] = ""
+    niveau: Annotated[str, Field(pattern="^(observation|hypothèse|alerte)$")]
+    titre: Annotated[str, Field(min_length=1, max_length=200)]
+    faits_observes: Annotated[list[str], Field(max_length=40)] = Field(default_factory=list)
+    explication: Annotated[str, Field(max_length=4000)] = ""
+    confiance: Annotated[str, Field(pattern="^(faible|moyenne|haute)$")] = "moyenne"
+    faux_positifs: Annotated[str, Field(max_length=2000)] = ""
+    cible: Annotated[str, Field(max_length=MAX_TEXTE_COURT)] = ""
+    debut: Annotated[str, Field(max_length=64)] = ""
+    dernier: Annotated[str, Field(max_length=64)] = ""
+    occurrences: Annotated[int, Field(ge=1, le=1_000_000)] = 1
+
 
 class AccuseReception(BaseModel):
     """Réponse à un lot. Le compte renvoyé permet à l'agent de détecter une perte."""
@@ -187,6 +221,8 @@ class AccuseReception(BaseModel):
     total_session: int
     #: Nombre de communications prises en compte dans ce lot (phase 2).
     communications: int = 0
+    #: Nombre de détections créées ou mises à jour dans ce lot (phase 4).
+    detections: int = 0
 
 
 class Statistiques(BaseModel):

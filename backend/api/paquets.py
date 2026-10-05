@@ -15,6 +15,20 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+try:
+    # Les seuils de détection sont définis dans l'agent, qui les applique. On les lit
+    # pour les rendre visibles dans l'interface — c'est une exigence du sujet de pouvoir
+    # savoir à partir de quoi une détection se déclenche.
+    #
+    # L'import est protégé parce que les deux moitiés du projet ne se déploient pas
+    # ensemble : l'agent tourne sur la machine à surveiller, le backend est en ligne. Si
+    # le dossier de l'agent n'est pas livré avec le backend, l'interface perd la liste des
+    # seuils — et rien d'autre. Une dépendance obligatoire entre les deux ferait échouer
+    # le déploiement en ligne pour une information d'agrément.
+    from agent.detection import SEUILS
+except ImportError:                                  # pragma: no cover
+    SEUILS: dict[str, int] = {}
+
 from backend.dependances import obtenir_stockage
 from backend.explain import llm
 from backend.explain import rules as moteur_explication
@@ -79,6 +93,30 @@ def lister_communications(
         )
     return {"communications": communications, "affichees": len(communications),
             "statistiques": stockage.statistiques()}
+
+
+@router.get("/alerts", summary="Détections de comportements inhabituels")
+def lister_detections(
+    stockage: Annotated[Stockage, Depends(obtenir_stockage)],
+    limite: Annotated[int, Query(ge=1, le=500, description="Nombre de détections à rendre")] = 100,
+    niveau: Annotated[str | None, Query(pattern="^(observation|hypothèse|alerte)$",
+                                        description="Filtre par niveau de certitude")] = None,
+    session: Annotated[str | None, Query(max_length=64)] = None,
+) -> dict[str, Any]:
+    """Rend les détections connues, la plus récente d'abord.
+
+    Le nom de la route est `alerts`, comme le demandait le sujet, mais le vocabulaire
+    employé dans les données est celui du moteur : « observation », « hypothèse »,
+    « alerte ». Un niveau « alerte » n'est pas un incident confirmé — c'est un faisceau
+    d'indices convergents, et le texte de chaque détection le dit.
+    """
+    detections = stockage.detections(limite=limite, niveau=niveau, session=session)
+    return {
+        "detections": detections,
+        "affichees": len(detections),
+        "par_niveau": stockage.statistiques().get("detections_par_niveau", {}),
+        "seuils": SEUILS,
+    }
 
 
 @router.get("/stats", summary="Chiffres du tableau de bord")

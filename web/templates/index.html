@@ -81,6 +81,34 @@
     </section>
   </div>
 
+  <section aria-labelledby="titre-detections">
+    <div class="titre-section--ligne">
+      <h2 id="titre-detections" class="titre-section">Alerts</h2>
+      <div class="filtres">
+        <label class="sr-only" for="filtre-niveau">Filtrer par niveau</label>
+        <select id="filtre-niveau">
+          <option value="">Tous les niveaux</option>
+          <option value="alerte">Alerte</option>
+          <option value="hypothèse">Hypothèse</option>
+          <option value="observation">Observation</option>
+        </select>
+      </div>
+    </div>
+    <p class="aide">
+      Les niveaux disent le <strong>degré de certitude</strong>, pas le degré de danger.
+      Une <em>observation</em> est un fait mesuré dont on ne conclut rien. Une
+      <em>hypothèse</em> est une forme qui ressemble à quelque chose, et que des usages
+      ordinaires produisent aussi. Une <em>alerte</em> naît de plusieurs indices
+      convergents sur une même machine — une seule règle n'en produit jamais.
+      Chaque détection nomme ce qu'elle peut avoir de faux.
+    </p>
+    <div id="liste-detections" class="detections"></div>
+    <p class="vide" id="detections-vide" hidden>
+      Rien à signaler pour l'instant. Les détections apparaissent dès que l'agent en
+      transmet — sur un réseau calme, il est normal qu'il n'y en ait aucune.
+    </p>
+  </section>
+
   <section aria-labelledby="titre-communications">
     <div class="titre-section--ligne">
       <h2 id="titre-communications" class="titre-section">Connections</h2>
@@ -202,6 +230,33 @@
      un moteur de règles déterministe : les mêmes paquets donnent toujours les mêmes
      phrases. La détection et l'enrichissement arrivent dans les phases suivantes.</p>
 </footer>
+
+{# Mise en forme d'une détection, recopiée par le JavaScript. #}
+<template id="gabarit-detection">
+  <article class="detection">
+    <header class="detection-entete">
+      <span class="etiquette-niveau"></span>
+      <h3 class="detection-titre"></h3>
+      <span class="detection-cible mono-cellule"></span>
+    </header>
+    <div class="bloc bloc-faits">
+      <span class="bloc-intitule">Ce qui a été observé</span>
+      <ul class="detection-faits"></ul>
+    </div>
+    <div class="bloc bloc-interpretation">
+      <span class="bloc-intitule">Ce qu'on peut en dire</span>
+      <p class="detection-explication"></p>
+    </div>
+    <div class="bloc bloc-prudence">
+      <span class="bloc-intitule">Ce que cela peut être d'autre — faux positifs possibles</span>
+      <p class="detection-faux-positifs"></p>
+    </div>
+    <footer class="detection-pied">
+      <span class="detection-confiance"></span>
+      <span class="detection-occurrences"></span>
+    </footer>
+  </article>
+</template>
 
 {# Mise en forme d'une ligne de paquet, recopiée par le JavaScript. #}
 <template id="gabarit-communication">

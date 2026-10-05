@@ -38,6 +38,7 @@ if str(RACINE) not in sys.path:
     sys.path.insert(0, str(RACINE))
 
 from agent import capture as mod_capture          # noqa: E402
+from agent import detection as mod_detection      # noqa: E402
 from agent import flows as mod_flows              # noqa: E402
 from agent import sender as mod_sender            # noqa: E402
 
@@ -126,7 +127,9 @@ def main(argv: list[str] | None = None) -> int:
                                           nom_agent=options.nom, session="")
         # La destination joint les communications au lot de paquets correspondant.
         envoyeur = mod_sender.Envoyeur(
-            lambda lot: client.envoyer(lot, communications=communications_a_transmettre()))
+            lambda lot: client.envoyer(lot,
+                                       communications=communications_a_transmettre(),
+                                       detections=detections_a_transmettre()))
 
     # ------------------------------------------------------------------ interface
     try:
@@ -148,6 +151,9 @@ def main(argv: list[str] | None = None) -> int:
     # qui évoluent, et celles qui viennent de se terminer — sans quoi la dernière version
     # d'une conversation, souvent la plus intéressante, ne partirait jamais.
     table = mod_flows.SuiviCommunications()
+    # Le détecteur vit aussi longtemps que la capture : c'est lui qui se souvient des
+    # machines déjà vues, la seule information qu'un lot isolé ne peut pas fournir.
+    detecteur = mod_detection.Detecteur()
     a_envoyer: dict[str, dict] = {}
     verrou = threading.Lock()      # accès partagé entre le fil de capture et celui d'envoi
 
@@ -166,6 +172,21 @@ def main(argv: list[str] | None = None) -> int:
             fiche_communication = communication.vers_dict()
             with verrou:
                 a_envoyer[fiche_communication["cle"]] = fiche_communication
+
+    def detections_a_transmettre() -> list[dict]:
+        """Relance la détection sur l'ensemble des conversations vivantes.
+
+        On lui donne la table entière, et non le seul lot courant : un balayage répartit
+        ses tentatives sur plusieurs lots, et ne serait jamais vu si on ne lui montrait
+        que le lot en cours. Le coût reste faible — quelques centaines de communications,
+        huit règles sans aucune entrée-sortie.
+
+        Seules les détections créées ou mises à jour sont renvoyées : le backend les
+        indexe par (règle, cible), donc une détection déjà connue est actualisée plutôt
+        que dupliquée.
+        """
+        vivantes = [communication.vers_dict() for communication in table.actives()]
+        return [detection.vers_dict() for detection in detecteur.analyser(vivantes)]
 
     def communications_a_transmettre() -> list[dict]:
         """Rend les communications en attente, évaluées à l'instant présent.
@@ -226,6 +247,14 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  paquets capturés   : {capteur.recus}")
     print(f"  analyses partielles: {capteur.erreurs_analyse}")
     print(f"  {envoyeur.stats.resume()}")
+    # Les détections avant l'arrêt : le dernier passage doit porter sur le trafic
+    # complet, sinon les formes apparues dans les dernières secondes ne seraient
+    # jamais signalées.
+    detecteur.analyser([communication.vers_dict() for communication in table.actives()])
+    comptes = detecteur.compter()
+    print(f"  détections         : {comptes.get('observation', 0)} observation(s) · "
+          f"{comptes.get('hypothèse', 0)} hypothèse(s) · "
+          f"{comptes.get('alerte', 0)} alerte(s)")
     resume = mod_flows.resume_chiffre(table.actives())
     print(f"  communications     : {len(table.actives())} encore ouvertes "
           f"· {resume['etats_incertains']} d'état incertain")

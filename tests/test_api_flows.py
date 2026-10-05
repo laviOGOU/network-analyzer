@@ -157,6 +157,88 @@ def test_deux_sessions_ne_se_melangent_pas(client):
     assert matin["communications"][0]["session"] == "capture-du-matin"
 
 
+def detection(niveau="observation", regle="scan_ports", cible="192.168.1.5", **remplacements):
+    """Une détection complète, telle que l'agent la produit."""
+    base = {
+        "regle": regle, "famille": "balayage", "niveau": niveau,
+        "titre": "Nombreux ports contactés", "faits_observes": ["20 ports en 20 secondes"],
+        "explication": "Une machine a tenté d'ouvrir des connexions sur de nombreux ports.",
+        "confiance": "moyenne",
+        "faux_positifs": "Un scanner utilisé volontairement, un logiciel qui cherche son serveur.",
+        "cible": cible, "debut": "2026-10-05T10:00:00+00:00",
+        "dernier": "2026-10-05T10:00:20+00:00", "occurrences": 1,
+    }
+    base.update(remplacements)
+    return base
+
+
+def test_les_detections_arrivent_jusqu_au_backend(client):
+    """Le trajet complet : l'agent détecte, le backend enregistre, l'interface lit."""
+    reponse = client.post("/api/v1/ingest", headers={"X-Agent-Token": JETON},
+                          json={"session": "capture-1", "agent": "poste", "paquets": [paquet()],
+                                "detections": [detection(niveau="alerte", regle="faisceau_indices")]})
+    assert reponse.status_code == 200
+    assert reponse.json()["detections"] == 1
+
+    liste = client.get("/api/v1/alerts").json()
+    assert liste["affichees"] == 1
+    assert liste["detections"][0]["niveau"] == "alerte"
+    assert liste["detections"][0]["session"] == "capture-1"
+
+
+def test_une_detection_revue_ne_se_duplique_pas(client):
+    """La même détection renvoyée à chaque lot doit mettre à jour son compteur.
+
+    Sans cette règle, le tableau de bord afficherait cent fois la même phrase et plus rien
+    d'autre — le défaut le plus courant d'un module de détection.
+    """
+    corps = {"session": "capture-1", "agent": "poste", "paquets": [paquet()],
+             "detections": [detection(occurrences=1)]}
+    client.post("/api/v1/ingest", headers={"X-Agent-Token": JETON}, json=corps)
+    corps["detections"][0]["occurrences"] = 4
+    client.post("/api/v1/ingest", headers={"X-Agent-Token": JETON}, json=corps)
+
+    liste = client.get("/api/v1/alerts").json()
+    assert liste["affichees"] == 1
+    assert liste["detections"][0]["occurrences"] == 4
+
+
+def test_deux_regles_sur_la_meme_machine_restent_distinctes(client):
+    """L'index comprend la règle : deux détections différentes ne s'écrasent pas."""
+    client.post("/api/v1/ingest", headers={"X-Agent-Token": JETON},
+                json={"session": "capture-1", "agent": "poste", "paquets": [paquet()],
+                      "detections": [detection(regle="scan_ports", cible="192.168.1.5"),
+                                     detection(regle="echecs_repetes", cible="192.168.1.5")]})
+    assert client.get("/api/v1/alerts").json()["affichees"] == 2
+
+
+def test_un_niveau_invente_est_refuse(client):
+    """Un niveau hors des trois existants doit être rejeté à l'entrée.
+
+    Accepté, il serait stocké et invisible dans l'interface : la détection disparaîtrait
+    sans que personne ne s'en aperçoive.
+    """
+    reponse = client.post("/api/v1/ingest", headers={"X-Agent-Token": JETON},
+                          json={"session": "capture-1", "agent": "poste", "paquets": [paquet()],
+                                "detections": [detection(niveau="catastrophe")]})
+    assert reponse.status_code == 422
+
+    reponse = client.post("/api/v1/ingest", headers={"X-Agent-Token": JETON},
+                          json={"session": "capture-1", "agent": "poste", "paquets": [paquet()],
+                                "detections": [detection(faux_positifs="")]})
+    assert reponse.status_code == 200      # vide est permis : c'est le moteur qui l'interdit
+
+
+def test_le_filtre_par_niveau_sur_la_route(client):
+    client.post("/api/v1/ingest", headers={"X-Agent-Token": JETON},
+                json={"session": "capture-1", "agent": "poste", "paquets": [paquet()],
+                      "detections": [detection(niveau="observation", regle="dns_volume"),
+                                     detection(niveau="alerte", regle="faisceau_indices")]})
+    alertes = client.get("/api/v1/alerts?niveau=alerte").json()
+    assert alertes["affichees"] == 1
+    assert alertes["detections"][0]["regle"] == "faisceau_indices"
+
+
 def test_le_filtre_du_journal_est_precis():
     """Le filtre doit taire une erreur de Windows sans masquer les vraies pannes.
 

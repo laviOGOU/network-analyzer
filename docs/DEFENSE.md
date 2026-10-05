@@ -504,3 +504,147 @@ n'apprend rien. Les règles précises passent donc avant, et un test verrouille 
   rien avoir fait. Le focus est désormais noté et restitué après chaque reconstruction, et
   un test automatisé l'éprouve en laissant passer plus d'un cycle complet.
 - **Une incohérence typographique** : « 1.8 ko » à l'anglaise au milieu d'un texte français.
+
+---
+
+# Phase 4 — Détecter
+
+## 1. Ce qui a été construit
+
+`agent/detection.py` : **huit règles**, trois niveaux, et une règle de synthèse.
+
+| Règle | Ce qu'elle repère | Niveau |
+|---|---|---|
+| `scan_ports` | une machine frappe à de nombreux ports d'une même cible | hypothèse |
+| `connexions_repetees` | la même connexion revient à intervalles rapprochés | hypothèse |
+| `volume_sortant` | un envoi important vers l'extérieur, avec peu de retour | hypothèse |
+| `echecs_repetes` | des ouvertures restées sans réponse | observation |
+| `service_sensible_entrant` | une connexion d'Internet vers un service qui ouvre une machine | observation |
+| `multiplication_destinations` | une machine joint beaucoup d'adresses différentes | observation |
+| `dns_volume` | beaucoup de demandes de résolution de noms | observation |
+| `machine_inconnue` | un appareil du réseau apparaît pour la première fois | observation |
+| `faisceau_indices` | **plusieurs indices convergents sur une même machine** | **alerte** |
+
+## 2. Pourquoi ces choix
+
+**Les niveaux disent le degré de certitude, pas le degré de danger.** C'est la distinction
+la plus importante du module, et la plus souvent ratée :
+
+- **observation** — un fait mesuré dont on ne conclut rien ;
+- **hypothèse** — une forme qui ressemble à quelque chose, et que des usages ordinaires
+  produisent aussi ;
+- **alerte** — plusieurs hypothèses de familles différentes qui convergent sur une même
+  machine.
+
+**Aucune règle isolée ne produit une alerte.** C'est le cœur du module. Chacune des formes
+détectées se produit naturellement plusieurs fois par jour sur un réseau domestique : un
+navigateur ouvre dix connexions par minute, une télévision vérifie ses mises à jour toutes
+les heures, un téléphone interroge le DNS en boucle. Exiger trois indices convergents fait
+tomber le bruit à presque rien — et le peu qui reste mérite vraiment un regard. Un test
+éprouve cette propriété **forme par forme** : chacune, prise seule, ne doit jamais produire
+d'alerte.
+
+**Deux règles d'une même famille ne comptent pas deux fois.** « Vingt ports contactés » et
+« vingt connexions répétées » décrivent le même phénomène sous deux angles. Les compter
+séparément gonflerait artificiellement le faisceau et ferait passer une seule observation
+pour trois. Le module compte des familles, pas des règles.
+
+**Les observations ne comptent pas du tout.** Elles décrivent des faits sans rien supposer ;
+les faire converger serait compter deux fois la même chose. Un navigateur qui ouvre une page
+produit « beaucoup de destinations » et « beaucoup de résolutions » : ce n'est pas un
+faisceau d'indices, c'est une page web.
+
+**Chaque détection nomme ses faux positifs.** C'est une exigence du sujet, et c'est surtout
+ce qui rend une détection utilisable. Un scanner de ports peut être un administrateur qui
+vérifie son parc ; un volume sortant peut être une sauvegarde. Une détection qui cacherait
+ce qu'elle peut avoir de faux laisserait croire à une conclusion. Un test vérifie que ce
+champ est rempli pour **toutes** les règles, et qu'il est consistant — pas une phrase vide.
+
+**Les seuils sont tous au même endroit**, au début du fichier. Un jury qui demande
+« pourquoi quinze ports ? » obtient une réponse en une ligne, pas une chasse dans le code.
+
+## 3. Comment les fonctions communiquent
+
+    paquets → flows.py → communications ──────────► detection.py ──► détections
+                                │                         │
+                                │                         └── analyse l'ensemble des
+                                │                             conversations vivantes, et
+                                │                             non le seul lot courant
+                                ▼
+                          sender.py ──► POST /api/v1/ingest ──► storage.py
+                                                                     │
+                                            GET /api/v1/alerts ◄─────┘
+                                                     │
+                                                     ▼
+                                              dashboard.js  ──► cartes « Alerts »
+
+**Pourquoi la détection reçoit la table entière et non le lot courant.** Un balayage
+répartit ses tentatives sur plusieurs lots : si la détection ne voyait que le lot en cours,
+elle ne verrait jamais les quinze ports ensemble, et la règle la plus utile du module ne se
+déclencherait jamais. C'est un point de conception, pas un détail d'implémentation.
+
+**Pourquoi le faisceau se calcule en dernier.** C'est un jugement sur ce que les autres
+règles viennent de trouver, et il doit voir l'ensemble des détections connues, y compris
+celles des lots précédents : une convergence peut se former sur plusieurs minutes.
+
+## 4. Cinq questions de défense
+
+**1. Pourquoi une seule règle ne suffit-elle pas à déclencher une alerte ?**
+
+Parce que chacune se déclenche sur un réseau normal. J'ai vérifié cette propriété forme par
+forme avec un test dédié : un balayage seul, des connexions répétées seules, un envoi
+massif seul ne produisent jamais d'alerte. Il faut trois familles différentes sur la même
+machine. Un outil qui crie au loup cesse d'être lu — et un outil d'analyse qu'on ne lit plus
+ne sert à rien, quelle que soit la finesse de ses règles.
+
+**2. Votre règle de balayage ne va-t-elle pas signaler du bruit ?**
+
+Si, et c'est écrit dans la détection elle-même. Un logiciel qui cherche son serveur en
+essayant plusieurs ports, une application mal configurée qui réessaie, un téléviseur en
+recherche produisent la même forme. C'est pour cela que le niveau est **hypothèse** et non
+alerte, et que les faux positifs sont affichés dans l'interface à côté de l'observation.
+Le lecteur a les deux informations et décide.
+
+**3. Comment savez-vous que vos seuils sont bons ?**
+
+Je ne le sais pas de façon absolue, et je ne le prétends pas. Ils viennent du trafic réel
+observé pendant la mise au point : quinze ports en soixante secondes, huit connexions en
+cinq minutes, cinq mégaoctets dans une communication. Ils sont tous regroupés au début du
+fichier pour pouvoir être ajustés en une ligne. Ce qui est vérifié, en revanche, c'est
+qu'ils **sont respectés** : un port de moins que le seuil ne déclenche rien, et un test le
+vérifie.
+
+**4. Pourquoi la règle « nouvel appareil » ne se déclenche-t-elle pas au premier lot ?**
+
+Parce que, au premier lot, toutes les machines sont nouvelles : le signaler n'apprendrait
+rien et noierait le reste. Le premier lot sert de référence. Un test le vérifie — c'est le
+premier piège d'un module de détection, et il est facile à ne pas voir.
+
+**5. Pourquoi le niveau « observation » existe-t-il, si on n'en conclut rien ?**
+
+Parce que savoir est déjà utile. « Cette machine est apparue pour la première fois » ne
+suppose rien, mais évite de s'étonner d'un trafic inconnu. « Cette adresse publique a
+contacté votre réseau sur le port 445 » ne dit pas qu'il y a eu intrusion, mais mérite
+d'être su. Les confondre avec des alertes serait aussi fautif que de les taire.
+
+## 5. Ce qui a été trouvé en écrivant cette phase
+
+- **Des faux appareils à chaque capture.** Le premier essai sur trafic réel a annoncé
+  « nouvel appareil » pour `255.255.255.255`, pour `0.0.0.0`, pour `169.254.x` et pour des
+  adresses IPv6 locales de lien (`fe80::`). Aucune ne désigne une machine : ce sont des
+  adresses de service, et elles apparaissent **en premier**, avant toute machine réelle.
+  Quatre faux appareils au démarrage suffisent à ce qu'on ne lise plus les détections. La
+  règle ne considère désormais que les adresses qui identifient durablement un appareil.
+- **Une table partagée sans verrou.** La table des communications est écrite par le fil de
+  capture et parcourue par le fil d'envoi — qui, depuis cette phase, l'interroge encore
+  plus souvent pour lancer la détection. Sans protection, la parcourir pendant qu'une
+  communication s'y ajoute lève « dictionary changed size during iteration ». Un verrou a
+  été ajouté sur les quatre points d'accès.
+- **Un test de mon outil de vérification devenait faux tout seul.** Les sélecteurs du
+  script cherchaient les blocs « faits observés » dans toute la page ; depuis que les cartes
+  de détection en affichent aussi, il ramenait le premier bloc venu — celui d'une alerte.
+  Les sélecteurs sont maintenant cadrés sur le panneau concerné.
+- **Une dépendance interdite entre les deux moitiés du projet.** Le backend lisait les
+  seuils de l'agent par un import direct. L'agent tourne sur la machine surveillée, le
+  backend en ligne : une dépendance obligatoire ferait échouer le déploiement en ligne pour
+  une information d'agrément. L'import est désormais facultatif.

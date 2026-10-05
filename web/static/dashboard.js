@@ -601,3 +601,104 @@
   charger();
   setInterval(charger, PERIODE_COMMUNICATIONS);
 })();
+
+
+/* =============================================================================
+   Détections — la section « Alerts »
+   -----------------------------------------------------------------------------
+   Un module à part, comme celui des communications : il a sa propre cadence, ses
+   propres filtres, et il échoue indépendamment. Si l'agent ne transmet pas de
+   détections, cette section reste simplement vide sans que le reste en souffre.
+   ============================================================================= */
+(function () {
+  "use strict";
+
+  const PERIODE_DETECTIONS = 5000;
+
+  const zone = {
+    liste: document.getElementById("liste-detections"),
+    vide: document.getElementById("detections-vide"),
+    gabarit: document.getElementById("gabarit-detection"),
+    filtre: document.getElementById("filtre-niveau"),
+  };
+  if (!zone.liste || !zone.gabarit) return;
+
+  let enVol = false;
+
+  function formaterHeure(iso) {
+    if (!iso) return "—";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit",
+                                              second: "2-digit" });
+  }
+
+  function rendre(detections) {
+    zone.liste.textContent = "";
+    if (!detections.length) {
+      zone.vide.hidden = false;
+      return;
+    }
+    zone.vide.hidden = true;
+
+    const fragment = document.createDocumentFragment();
+    for (const detection of detections) {
+      const carte = zone.gabarit.content.firstElementChild.cloneNode(true);
+
+      const niveau = carte.querySelector(".etiquette-niveau");
+      // Le niveau est écrit en toutes lettres, et non seulement coloré : environ un
+      // homme sur douze distingue mal le rouge du vert.
+      niveau.textContent = detection.niveau;
+      niveau.dataset.niveau = detection.niveau;
+
+      carte.querySelector(".detection-titre").textContent = detection.titre;
+      carte.querySelector(".detection-cible").textContent = detection.cible;
+
+      const faits = carte.querySelector(".detection-faits");
+      for (const fait of detection.faits_observes || []) {
+        const item = document.createElement("li");
+        item.textContent = fait;
+        faits.appendChild(item);
+      }
+
+      carte.querySelector(".detection-explication").textContent = detection.explication || "";
+      carte.querySelector(".detection-faux-positifs").textContent =
+        detection.faux_positifs || "Non précisé par cette règle.";
+
+      carte.querySelector(".detection-confiance").textContent =
+        `confiance ${detection.confiance || "inconnue"} · règle « ${detection.regle} »`;
+
+      const occurrences = detection.occurrences || 1;
+      carte.querySelector(".detection-occurrences").textContent = occurrences > 1
+        ? `revue ${occurrences} fois · dernière à ${formaterHeure(detection.dernier)}`
+        : `observée à ${formaterHeure(detection.debut)}`;
+
+      fragment.appendChild(carte);
+    }
+    zone.liste.appendChild(fragment);
+  }
+
+  async function charger() {
+    if (enVol || document.hidden) return;
+    enVol = true;
+    try {
+      const parametres = new URLSearchParams({ limite: "50" });
+      if (zone.filtre.value) parametres.set("niveau", zone.filtre.value);
+      const reponse = await fetch(`/api/v1/alerts?${parametres}`,
+                                  { headers: { Accept: "application/json" } });
+      if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
+      const donnees = await reponse.json();
+      rendre(donnees.detections || []);
+    } catch (erreur) {
+      // On ne vide pas la liste : l'indicateur principal signale déjà la panne, et des
+      // détections anciennes valent mieux qu'un écran vide.
+      console.warn("Détections non rafraîchies :", erreur.message);
+    } finally {
+      enVol = false;
+    }
+  }
+
+  zone.filtre.addEventListener("change", charger);
+  charger();
+  setInterval(charger, PERIODE_DETECTIONS);
+})();

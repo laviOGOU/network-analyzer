@@ -1,11 +1,12 @@
 # Intelligent Network Packet Analyzer
 
-> **État : phase 3 sur 5.** Sont construits et vérifiés à ce jour : la capture réelle,
+> **État : phase 4 sur 5.** Sont construits et vérifiés à ce jour : la capture réelle,
 > l'analyse des paquets, le regroupement en communications avec déduction d'état, le
-> schéma de base de données, la transmission, l'affichage en direct, et le **moteur
-> d'explication** qui traduit tout cela en phrases compréhensibles.
-> La détection, l'enrichissement et le branchement sur Supabase
-> arrivent dans les phases suivantes — le README est mis à jour à chaque phase, et la
+> schéma de base de données, la transmission, l'affichage en direct, le **moteur
+> d'explication** qui traduit tout cela en phrases compréhensibles, et la **détection**
+> des comportements inhabituels sur trois niveaux.
+> L'enrichissement et le branchement sur Supabase
+> arrivent dans la phase suivante — le README est mis à jour à chaque phase, et la
 > section « Limites » dit exactement ce qui n'existe pas encore.
 
 Capturer le trafic réseau, le structurer, le comprendre, et l'expliquer à quelqu'un qui
@@ -70,6 +71,7 @@ network-analyzer/
     capture.py          #   lister/choisir une interface, démarrer/arrêter, droits
     parser.py           #   paquet Scapy → fiche structurée, jamais d'exception
     flows.py            #   regroupement en communications, état TCP, expiration
+    detection.py        #   huit règles de détection, trois niveaux, faux positifs
     sender.py           #   file d'attente bornée, regroupement par lots, réessai
     main.py             #   ligne de commande, assemblage, compteurs
   backend/              # tourne en ligne
@@ -124,6 +126,7 @@ pour la phase 1.
 | `GET` | `/api/v1/packets` | public | derniers paquets, filtrables (`limite`, `protocole`, `session`, `recherche`) |
 | `GET` | `/api/v1/flows` | public | communications regroupées, filtrables (`etat`, `protocole`, `recherche`) |
 | `GET` | `/api/v1/flows/explications` | public | toutes les explications d'une communication (`cle`, `reformuler`) |
+| `GET` | `/api/v1/alerts` | public | détections, filtrables (`niveau`, `session`) |
 | `GET` | `/api/v1/stats` | public | compteurs, répartitions, classements |
 | `GET` | `/api/v1/sessions` | public | sessions de capture reçues |
 | `GET` | `/api/v1/health` | public | état du service |
@@ -238,6 +241,43 @@ Options utiles : `--duree 30` (arrêt automatique), `--filtre "tcp or udp"` (fil
 > vous disposez d'une autorisation écrite. Capturer le trafic d'un réseau qui ne vous
 > appartient pas est illégal.
 
+## La détection
+
+Huit règles, trois niveaux, et une règle de synthèse. Le vocabulaire des niveaux dit le
+**degré de certitude**, pas le degré de danger :
+
+- **observation** — un fait mesuré, dont on ne conclut rien. « Un appareil est apparu pour
+  la première fois. » C'est une information, pas un signal.
+- **hypothèse** — une forme qui ressemble à quelque chose, et que des usages ordinaires
+  produisent aussi. « Vingt ports contactés en trente secondes » — un scanner, ou un
+  logiciel qui cherche son serveur.
+- **alerte** — plusieurs hypothèses de **familles différentes** qui convergent sur une même
+  machine. Une seule règle n'en produit jamais : c'est la promesse du module, et un test
+  l'éprouve forme par forme.
+
+![Détections](docs/captures-interface/04-detections-niveaux.png)
+
+**Chaque détection nomme ses faux positifs**, et l'interface les affiche à côté de
+l'observation. Un scanner de ports peut être un administrateur qui vérifie son parc ; un
+envoi de cinq mégaoctets peut être une sauvegarde. Sans cette mention, un lecteur prendrait
+une forme pour une conclusion — et c'est précisément ce qu'un outil d'analyse ne doit pas
+provoquer.
+
+**Les seuils sont visibles.** `GET /api/v1/alerts` les renvoie, et ils sont regroupés au
+début de `agent/detection.py` : savoir à partir de quoi une détection se déclenche fait
+partie de l'explication.
+
+**Ce qui a été observé sur trafic réel** — 40 secondes de navigation ordinaire :
+
+| Détection | Cible |
+|---|---|
+| `connexions_repetees` (hypothèse) | une machine interrogeant le DNS de la box de façon répétée |
+| `machine_inconnue` (observation) | huit appareils du réseau, dont l'imprimante et deux téléphones |
+| `dns_volume` (observation) | 42 demandes de résolution en deux minutes |
+
+Aucune alerte : c'est le comportement attendu sur un réseau calme, et c'est ce qui rend le
+niveau « alerte » crédible quand il apparaît.
+
 ## Les explications
 
 C'est la partie que l'énoncé désigne comme la plus importante : faire passer l'outil de
@@ -296,7 +336,7 @@ from backend.explain import explications     # toutes les explications applicabl
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
-**133 tests**, dont :
+**162 tests**, dont :
 
 - **parseur** — poignée de main TCP complète, SYN sans réponse, RST, DNS (question et
   réponse), mDNS sans section question, ICMP, ARP, UDP, IPv6, paquet tronqué, protocole
@@ -313,6 +353,12 @@ from backend.explain import explications     # toutes les explications applicabl
   cours de route (état incertain), expiration TCP et UDP, délais réglables ;
 - **API des communications** — refonte par clé au lieu de la duplication, filtres par état
   et par protocole, refus d'un total incohérent ;
+- **détection** — aucune règle isolée ne produit d'alerte (éprouvé forme par forme),
+  trois indices convergents en produisent une, deux règles d'une même famille ne comptent
+  pas double, une observation ne compte pas comme un indice, les seuils sont respectés à
+  l'unité près, une détection revue met à jour son compteur au lieu de se dupliquer, une
+  diffusion ou une adresse locale de lien n'est pas un appareil, et une communication
+  malformée ne fait jamais échouer l'analyse ;
 - **explications** — structure toujours complète, absence de certitude sur un service
   déduit d'un port, service sensible qui n'est pas présenté comme une attaque, confiance
   alignée sur la certitude de l'observation, déterminisme (même entrée, même sortie),

@@ -1,4 +1,61 @@
 /* =============================================================================
+   Détections — trois niveaux, jamais signalés par la couleur seule
+   -----------------------------------------------------------------------------
+   Chaque carte porte le nom de son niveau écrit en toutes lettres, en plus de sa
+   couleur, et chaque détection affiche ses faux positifs possibles. C'est une exigence
+   du sujet, et c'est ce qui distingue une détection utilisable d'une alerte gratuite :
+   le lecteur sait à la fois ce qui a été observé et ce que cela pourrait être d'autre.
+   ============================================================================= */
+
+.detections { display: grid; gap: 1rem; }
+
+.detection {
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: var(--rayon);
+  padding: 1rem 1.1rem;
+}
+
+.detection-entete {
+  display: flex; flex-wrap: wrap; gap: .5rem .75rem;
+  align-items: center;
+  margin-bottom: .75rem;
+}
+
+.detection-titre { margin: 0; font-size: 1rem; flex: 1 1 12rem; }
+.detection-cible { color: var(--texte-doux); font-size: .8rem; }
+
+.etiquette-niveau {
+  font-size: .72rem;
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.etiquette-niveau[data-niveau="observation"] { color: var(--texte-doux); }
+.etiquette-niveau[data-niveau="hypothèse"] { color: var(--attention); }
+.etiquette-niveau[data-niveau="alerte"] { color: var(--danger); }
+
+/* Le bloc des faux positifs se distingue des deux autres : c'est le seul qui parle de
+   ce que la détection n'est PAS. */
+.bloc-prudence { border-left-color: var(--texte-faible); background: var(--surface-2); }
+
+.detection-pied {
+  display: flex; flex-wrap: wrap; gap: .75rem;
+  justify-content: space-between;
+  font-size: .78rem;
+  color: var(--texte-faible);
+  margin-top: .5rem;
+}
+
+@media (max-width: 640px) {
+  .detection { padding: .85rem; }
+  .detection-titre { font-size: .95rem; }
+}
+
+/* =============================================================================
    Table des communications — un tableau qui tient dans son cadre
    -----------------------------------------------------------------------------
    Mesuré avant correction : 1691 px de contenu pour 1374 px de place à 1440 px de

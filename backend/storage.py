@@ -55,6 +55,10 @@ class Stockage:
         # évoluer, et la dernière version reçue est la bonne.
         self._communications: dict[str, dict[str, Any]] = {}
         self._communications_vues = 0
+        # Détections, indexées par (session, règle, cible) pour la même raison que les
+        # communications : la version la plus récente fait foi, sans doublon.
+        self._detections: dict[str, dict[str, Any]] = {}
+        self._detections_vues = 0
 
     # ------------------------------------------------------------------ écriture
     def enregistrer_lot(self, session: str, agent: str, paquets: list[dict[str, Any]]) -> int:
@@ -150,6 +154,48 @@ class Stockage:
                 self._communications = dict(triees[:self.taille_max])
             return len(communications)
 
+    def enregistrer_detections(self, session: str,
+                               detections: list[dict[str, Any]]) -> int:
+        """Refond les détections reçues, indexées par (session, règle, cible).
+
+        La même détection, revue à chaque lot par l'agent, doit mettre à jour son compteur
+        et non apparaître en double : sinon le tableau de bord afficherait cent fois la
+        même phrase, et plus rien d'autre.
+        """
+        if not detections:
+            return 0
+        with self._verrou:
+            for detection in detections:
+                regle = detection.get("regle")
+                if not regle:
+                    continue
+                index = f"{session}|{regle}|{detection.get('cible') or ''}"
+                if index not in self._detections:
+                    self._detections_vues += 1
+                self._detections[index] = {**detection, "session": session}
+
+            # Même règle de bornage que pour les communications : on garde les plus
+            # récentes, et on laisse tomber les plus anciennes.
+            if len(self._detections) > self.taille_max:
+                triees = sorted(self._detections.items(),
+                                key=lambda element: element[1].get("dernier") or "",
+                                reverse=True)
+                self._detections = dict(triees[:self.taille_max])
+            return len(detections)
+
+    def detections(self, limite: int = 200, niveau: str | None = None,
+                   session: str | None = None) -> list[dict[str, Any]]:
+        """Détections conservées, la plus récente d'abord."""
+        with self._verrou:
+            liste = list(self._detections.values())
+
+        if session:
+            liste = [d for d in liste if d.get("session") == session]
+        if niveau:
+            liste = [d for d in liste if d.get("niveau") == niveau]
+        liste.sort(key=lambda d: (d.get("dernier") or "", d.get("debut") or ""), reverse=True)
+        return liste[:limite]
+
     def vider(self) -> None:
         """Remet le tampon et les compteurs à zéro. Utilisé par les tests.
 
@@ -171,6 +217,8 @@ class Stockage:
             self._dernier = None
             self._communications.clear()
             self._communications_vues = 0
+            self._detections.clear()
+            self._detections_vues = 0
 
     # ------------------------------------------------------------------ lecture
     def paquets(self, limite: int = 100, protocole: str | None = None,
@@ -253,6 +301,10 @@ class Stockage:
                 "dernier_paquet": self._dernier,
                 "analyses_partielles": self._analyses_partielles,
                 "sessions": len(self._sessions),
+                "detections_total": self._detections_vues,
+                "detections_conservees": len(self._detections),
+                "detections_par_niveau": dict(Counter(
+                    d.get("niveau") or "inconnu" for d in self._detections.values())),
                 "communications_total": self._communications_vues,
                 "communications_conservees": len(self._communications),
                 "communications_par_etat": dict(

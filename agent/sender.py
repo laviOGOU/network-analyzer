@@ -184,7 +184,8 @@ class ClientBackend:
         self.session = session
 
     def envoyer(self, lot: list[dict[str, Any]],
-                communications: list[dict[str, Any]] | None = None) -> None:
+                communications: list[dict[str, Any]] | None = None,
+                detections: list[dict[str, Any]] | None = None) -> None:
         """POST /api/v1/ingest. Lève en cas d'échec : l'appelant décide quoi en faire.
 
         Les communications voyagent dans le même lot que les paquets : elles décrivent
@@ -196,6 +197,10 @@ class ClientBackend:
             "agent": self.nom_agent,
             "paquets": lot,
             "communications": communications or [],
+            # Les détections voyagent avec le lot, comme les communications. C'est
+            # l'agent qui les calcule : lui seul voit le trafic au moment où il passe,
+            # et l'architecture imposée du projet place la détection de son côté.
+            "detections": detections or [],
         }
         reponse = httpx.post(
             f"{self.url}/api/v1/ingest",

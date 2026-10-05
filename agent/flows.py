@@ -44,6 +44,7 @@ Ces valeurs sont réglables : elles dépendent du réseau observé.
 from __future__ import annotations
 
 import datetime as dt
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
@@ -162,6 +163,12 @@ class SuiviCommunications:
         self.delai_udp = delai_udp
         self.delai_autre = delai_autre
         self._communications: dict[tuple, Communication] = {}
+        # Un verrou, parce que deux fils se partagent cette table : celui de capture y
+        # écrit à chaque paquet, celui d'envoi la parcourt pour constituer les lots et
+        # lancer la détection. Sans lui, parcourir la table pendant qu'une communication
+        # s'y ajoute lève « dictionary changed size during iteration » — rare, brutal, et
+        # difficile à reproduire puisqu'il faut du trafic pour le déclencher.
+        self._verrou = threading.Lock()
 
     # ------------------------------------------------------------------ apport
     def ajouter(self, fiche: dict[str, Any]) -> Communication | None:
@@ -170,6 +177,10 @@ class SuiviCommunications:
         Rend `None` pour un paquet sans adresses IP : un paquet ARP seul, ou une trame
         tronquée, ne constitue pas une conversation entre deux machines.
         """
+        with self._verrou:
+            return self._ajouter_sans_verrou(fiche)
+
+    def _ajouter_sans_verrou(self, fiche: dict[str, Any]) -> Communication | None:
         ip_source = fiche.get("ip_source")
         ip_destination = fiche.get("ip_destination")
         if not ip_source or not ip_destination:
@@ -247,7 +258,16 @@ class SuiviCommunications:
             communication.termine_le = fiche.get("horodatage")
 
     # ------------------------------------------------------------------ sortie
-    def retirer_terminées(self, maintenant: dt.datetime | None = None) -> list[Communication]:
+    def retirer_terminées(self, maintenant: datetime | None = None) -> list[Communication]:
+        """Sort les communications terminées ou expirées de la table.
+
+        On les rend au lieu de les oublier : c'est à l'appelant de décider de les
+        transmettre, de les archiver ou de les compter.
+        """
+        with self._verrou:
+            return self._retirer_terminées_sans_verrou(maintenant)
+
+    def _retirer_terminées_sans_verrou(self, maintenant: datetime | None = None) -> list[Communication]:
         """Sort les communications terminées ou expirées de la table.
 
         On les rend au lieu de les oublier : c'est à l'appelant de décider de les
@@ -285,8 +305,9 @@ class SuiviCommunications:
 
     def actives(self) -> list[Communication]:
         """Communications en cours, la plus récente d'abord."""
-        return sorted(self._communications.values(),
-                      key=lambda c: c.dernier_paquet, reverse=True)
+        with self._verrou:
+            return sorted(self._communications.values(),
+                          key=lambda c: c.dernier_paquet, reverse=True)
 
     def completer_etat(self, maintenant: dt.datetime | None = None) -> None:
         """Réévalue l'état des communications actives, sans attendre un nouveau paquet.
@@ -295,13 +316,15 @@ class SuiviCommunications:
         recalculé qu'à l'arrivée du paquet suivant — qui n'arrivera jamais, justement.
         """
         maintenant = maintenant or dt.datetime.now(dt.timezone.utc)
-        for communication in self._communications.values():
-            maj_etat(communication, maintenant)
+        with self._verrou:
+            for communication in self._communications.values():
+                maj_etat(communication, maintenant)
 
     def vider(self) -> list[Communication]:
         """Rend toutes les communications et vide la table."""
-        toutes = list(self._communications.values())
-        self._communications.clear()
+        with self._verrou:
+            toutes = list(self._communications.values())
+            self._communications.clear()
         return toutes
 
 

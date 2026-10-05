@@ -58,13 +58,13 @@ function verifier(intitule, condition, precision = "") {
   verifier("la table des communications se remplit", lignes > 0, `${lignes} ligne(s)`);
   // Capture de la section, et non de la page entière : la page complète fait plus de
   // dix-huit mille pixels de haut, illisible une fois réduite, et inutile comme preuve.
-  // On ne garde que le haut du tableau : cent cinquante lignes donnent une image de
-  // plusieurs mégaoctets, illisible et inutile comme preuve. Huit lignes suffisent.
-  const boite = await page.locator("#tableau-communications").boundingBox();
-  await page.screenshot({
-    path: chemin.join(dossier, "01-connections.png"),
-    clip: { x: boite.x, y: boite.y, width: boite.width, height: Math.min(boite.height, 640) },
-  });
+  // Capture de la fenêtre, après avoir amené le tableau à l'écran. On ne découpe plus
+  // dans la page : la découpe devient invalide dès que la section se trouve hors de la
+  // fenêtre — ce qui est arrivé à la première section ajoutée au-dessus. Une capture de
+  // ce que voit l'utilisateur ne peut pas se casser de cette façon.
+  await page.locator("#titre-communications").scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: chemin.join(dossier, "01-connections.png") });
 
   if (lignes === 0) {
     console.log("\n  Aucune communication : lancez une capture avant de relancer ce script.");
@@ -83,19 +83,26 @@ function verifier(intitule, condition, precision = "") {
   await page.waitForSelector("#detail-communication:not([hidden])", { timeout: 5000 });
   await page.waitForTimeout(400);
 
-  const faits = await page.locator(".bloc-faits").first().textContent();
-  const interpretation = await page.locator(".bloc-interpretation").first().textContent();
+  // Les sélecteurs sont cadrés sur le panneau de détail : depuis que les détections
+  // affichent elles aussi des blocs « faits » et « interprétation », les chercher dans
+  // toute la page ramenait le premier bloc venu — celui d'une carte d'alerte. Le test
+  // passait ou échouait selon l'ordre des sections, ce qui n'a aucun rapport avec ce
+  // qu'il prétend vérifier.
+  const faits = await page.locator("#detail-communication .bloc-faits").first().textContent();
+  const interpretation = await page.locator("#detail-communication .bloc-interpretation")
+    .first().textContent();
   verifier("le détail montre les faits observés", /Faits observés/i.test(faits || ""));
   verifier("le détail montre l'interprétation", /Interprétation/i.test(interpretation || ""));
   verifier("faits et interprétation sont deux blocs distincts",
-    (await page.locator(".bloc-faits").count()) > 0
-    && (await page.locator(".bloc-interpretation").count()) > 0);
+    (await page.locator("#detail-communication .bloc-faits").count()) > 0
+    && (await page.locator("#detail-communication .bloc-interpretation").count()) > 0);
 
   // Le rappel de prudence : la phrase qui protège d'une conclusion trop rapide.
   verifier("le rappel de prudence est affiché",
-    /jamais certaines/i.test(await page.locator(".jamais-certain").first().textContent() || ""));
+    /jamais certaines/i.test(
+      await page.locator("#detail-communication .jamais-certain").first().textContent() || ""));
 
-  const duree = (await page.locator("#detail-resume").textContent()) || "";
+  const duree = (await page.locator("#detail-communication #detail-resume").textContent()) || "";
   verifier("le résumé chiffré est présent", /\d/.test(duree), duree.trim().slice(0, 80));
   await page.locator("#detail-communication")
     .screenshot({ path: chemin.join(dossier, "02-detail.png") });
@@ -115,6 +122,75 @@ function verifier(intitule, condition, precision = "") {
   await page.waitForTimeout(4000);
   verifier("le focus survit à un rafraîchissement de la table",
     await page.evaluate(() => document.activeElement?.classList.contains("bouton-detail")));
+
+  /* ------------------------------------------------------- section Alerts */
+  // Les trois niveaux sont injectés par l'API, dans une session distincte et nommée comme
+  // telle, pour vérifier que chacun s'affiche correctement. C'est une vérification du
+  // **rendu** : les tests serveur prouvent que la détection produit les bons niveaux, pas
+  // que l'interface les montre. La session de vérification est ensuite effacée en
+  // redémarrant le backend, pour ne pas mêler des données de démonstration au trafic réel.
+  const jeton = process.env.ANALYZER_JETON;
+
+  await page.locator("#titre-detections").scrollIntoViewIfNeeded();
+  const cartes = await page.locator("#liste-detections .detection").count();
+  verifier("la section Alerts affiche des détections", cartes > 0, `${cartes} carte(s)`);
+
+  if (cartes > 0) {
+    const niveau = await page.locator(".etiquette-niveau").first().textContent();
+    verifier("le niveau est écrit en toutes lettres",
+      ["observation", "hypothèse", "alerte"].includes((niveau || "").trim()),
+      `« ${(niveau || "").trim()} »`);
+    verifier("chaque détection affiche ses faits observés",
+      (await page.locator(".detection-faits li").count()) > 0);
+    // L'exigence du sujet : la détection doit dire ce qu'elle peut avoir de faux.
+    const faux = (await page.locator(".detection-faux-positifs").first().textContent()) || "";
+    verifier("chaque détection nomme ses faux positifs", faux.trim().length > 30,
+      faux.trim().slice(0, 60) + "…");
+    await page.locator("#liste-detections").screenshot(
+      { path: chemin.join(dossier, "03-detections.png") });
+  }
+
+  if (jeton) {
+    const niveaux = ["observation", "hypothèse", "alerte"];
+    await page.evaluate(async ([jeton, niveaux]) => {
+      await fetch("/api/v1/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Agent-Token": jeton },
+        body: JSON.stringify({
+          session: "verification-rendu", agent: "verificateur",
+          paquets: [{ horodatage: new Date().toISOString(), protocole: "TCP",
+                      ip_source: "127.0.0.1", ip_destination: "127.0.0.1",
+                      taille: 60, ttl: 64 }],
+          detections: niveaux.map((niveau, i) => ({
+            regle: `verification_niveau_${i}`, famille: "verification", niveau,
+            titre: `Détection de niveau ${niveau}`,
+            faits_observes: ["Fait de vérification, injecté pour éprouver le rendu"],
+            explication: "Cette détection sert uniquement à vérifier l'affichage des trois niveaux.",
+            confiance: "moyenne",
+            faux_positifs: "Détection de vérification : elle n'observe rien de réel et sert au test du rendu.",
+            cible: `verification-${i}`, debut: new Date().toISOString(),
+            dernier: new Date().toISOString(), occurrences: 1,
+          })),
+        }),
+      });
+    }, [jeton, niveaux]);
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForTimeout(1500);
+    const affiches = await page.locator("#liste-detections .etiquette-niveau").allTextContents();
+    for (const niveau of niveaux) {
+      verifier(`le niveau « ${niveau} » s'affiche`, affiches.includes(niveau));
+    }
+    const couleurs = await page.locator("#liste-detections .etiquette-niveau")
+      .evaluateAll((elements) => elements.map((e) => getComputedStyle(e).color));
+    verifier("les trois niveaux se distinguent visuellement",
+      new Set(couleurs).size >= 3, `${new Set(couleurs).size} couleurs distinctes`);
+    await page.locator("#titre-detections").scrollIntoViewIfNeeded();
+    await page.locator("#liste-detections").screenshot(
+      { path: chemin.join(dossier, "04-detections-niveaux.png") });
+  } else {
+    console.log("  (niveau de rendu des trois niveaux non vérifié : ANALYZER_JETON absent)");
+  }
 
   verifier("aucune erreur JavaScript", erreurs.length === 0, erreurs.slice(0, 3).join(" | "));
 
