@@ -284,6 +284,55 @@ body.guide-ouvert { overflow: hidden; }
 
 .vue-onglet:focus-visible { outline: 2px solid var(--primaire); outline-offset: -2px; }
 
+/* ---------------------------------------------------------- message d'accueil
+   Une bannière, pas une fenêtre : elle dit où l'on est et ce que fait l'outil, puis s'efface
+   derrière ce qu'on est venu faire. Le guide, lui, s'ouvre par-dessus et explique la marche à
+   suivre — deux rôles, deux endroits. */
+.bienvenue {
+  border: 1px solid var(--bordure);
+  border-left: 4px solid var(--accent);
+  border-radius: .5rem;
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(34, 211, 238, .10) 0%, transparent 55%),
+    var(--surface);
+  padding: 1.1rem 1.3rem 1.2rem;
+  margin-bottom: 1.25rem;
+}
+
+.bienvenue__titre {
+  margin: 0 0 .35rem;
+  font-size: clamp(1.15rem, 1rem + .8vw, 1.5rem);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.bienvenue__phrase {
+  margin: 0 0 .55rem;
+  font-size: clamp(.95rem, .9rem + .3vw, 1.05rem);
+  color: var(--texte);
+}
+
+.bienvenue__texte {
+  margin: 0 0 .85rem;
+  color: var(--texte-doux);
+  max-width: 62ch;
+}
+
+/* La chaîne du sujet, en trois mots : c'est le résumé de tout l'outil, et il doit se lire
+   d'un seul regard. Le cyan les relie au logo. */
+.bienvenue__chaine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  align-items: center;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--accent-2);
+}
+
+.bienvenue__chaine span { white-space: nowrap; }
+
 /* ------------------------------------------------------------------ capture en direct
    Les deux états d'une capture doivent se distinguer d'un coup d'œil : on ne peut pas
    laisser croire qu'on écoute alors qu'on a arrêté, ni l'inverse. */

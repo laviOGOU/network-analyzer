@@ -61,6 +61,23 @@
 {# Barre de filtre d'affichage. Elle agit sur les trois listes à la fois — paquets,
    communications, détections — parce qu'un filtre qui ne s'appliquerait qu'à une partie
    de la page donnerait deux réponses différentes à la même question. #}
+  {# Message d'accueil. Ce n'est PAS le guide : celui-ci s'ouvre en fenêtre et explique la
+     marche à suivre, celui-là se contente de dire où l'on est et ce que fait l'outil. Ils ne
+     s'affichent pas au même endroit et ne servent pas à la même chose. #}
+  <section class="bienvenue" aria-labelledby="titre-bienvenue">
+    <h2 id="titre-bienvenue" class="bienvenue__titre">Bienvenue sur FlowScope</h2>
+    <p class="bienvenue__phrase">
+      Analysez, visualisez et comprenez votre trafic réseau en temps réel.
+    </p>
+    <p class="bienvenue__texte">
+      FlowScope inspecte les paquets réseau, identifie les protocoles, détecte les
+      comportements suspects et vous aide à repérer les anomalies de sécurité.
+    </p>
+    <p class="bienvenue__chaine">
+      <span>Capturer.</span> <span>Analyser.</span> <span>Comprendre.</span>
+    </p>
+  </section>
+
 <nav class="vues" aria-label="Vues de l'analyse">
   <button type="button" class="vue-onglet" data-cible="traffic">Traffic</button>
   <button type="button" class="vue-onglet" data-cible="connections">Connections</button>
