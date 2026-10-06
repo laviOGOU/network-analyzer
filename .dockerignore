@@ -1,0 +1,28 @@
+# Ce fichier decide de ce qui entre dans l'image publiee.
+#
+# LE PLUS IMPORTANT : .env porte l'adresse de la base et son mot de passe. Une image est
+# telechargeable ; un .env qui y entre est un mot de passe publie. Les variables sensibles
+# se declarent chez l'hebergeur, jamais dans un fichier du depot.
+.env
+.env.*
+!.env.example
+
+# Rien de tout cela n'est utile au service en ligne.
+docs/
+tests/
+outils/
+sql/
+exemples/
+.git/
+.venv/
+__pycache__/
+*.pyc
+*.md
+*.docx
+*.pcap
+profils.json
+
+# Les fichiers laisses par la tentative Vercel : ils n'ont plus d'emploi ici.
+vercel.json
+.vercelignore
+api/

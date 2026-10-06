@@ -65,3 +65,4 @@ profils.json
 # le .docx est genere en local a partir de lui.
 *.docx
 *.doc
+.vercel
