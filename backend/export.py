@@ -139,3 +139,151 @@ def nom_de_fichier(vue: str, format_: str, horodatage: str) -> str:
     """
     date = "".join(caractere for caractere in horodatage[:19] if caractere.isdigit())
     return f"network-analyzer_{vue}_{date}.{format_}"
+
+
+def _latin1(texte: str) -> str:
+    """Ramène un texte à ce que les polices de base de fpdf2 savent écrire.
+
+    Les polices livrées avec fpdf2 ne connaissent que le latin-1. Les accents français en font
+    partie — « é » est écrit correctement — mais les caractères typographiques non : la flèche,
+    le tiret long, le point médian, les guillemets français. Sans ce nettoyage, fpdf2 les
+    remplace par un caractère de substitution et le document sort avec des trous.
+
+    Les remplacer plutôt que les supprimer garde le sens : « A → B » devient « A -> B », qui se
+    lit encore, au lieu de « A  B », qui ne se lit plus.
+    """
+    remplacements = {
+        "\u2192": "->", "\u2190": "<-", "\u2014": "-", "\u2013": "-", "\u00b7": "-",
+        "\u2026": "...", "\u2019": "'", "\u2018": "'", "\u00ab": '"', "\u00bb": '"',
+        "\u202f": " ", "\u00a0": " ", "\u2265": ">=", "\u2264": "<=", "\u00d7": "x",
+    }
+    for avant, apres in remplacements.items():
+        texte = texte.replace(avant, apres)
+    return texte.encode("latin-1", "replace").decode("latin-1")
+
+
+def vers_texte_couche(couche: dict[str, Any], valeurs: dict[str, Any] | None = None,
+                      horodatage: str = "") -> str:
+    """Rend l'explication d'une couche en texte brut, lisible sans aucun outil.
+
+    C'est le format qui survit à tout : il s'ouvre dans un terminal, un bloc-notes, un journal
+    de bord. Les autres formats s'adressent à un programme ; celui-ci s'adresse à un lecteur.
+    """
+    valeurs = valeurs or {}
+    lignes = [
+        "FlowScope - explication d'une couche reseau",
+        "=" * 46,
+        "",
+        f"Couche    : {couche.get('nom', '?')}",
+        f"Produit le: {horodatage or 'date inconnue'}",
+        "",
+        "CE QUE FAIT CETTE COUCHE",
+        "-" * 46,
+        str(couche.get("role", "")),
+        "",
+        "LES CHAMPS QU'ELLE PORTE",
+        "-" * 46,
+    ]
+    for champ in couche.get("champs", []):
+        libelle = champ.get("libelle", "?")
+        octets = champ.get("octets", "?")
+        lignes.append(f"  {libelle} ({octets} octet(s))")
+        valeur = valeurs.get(champ.get("source")) if champ.get("source") else None
+        if valeur not in (None, ""):
+            lignes.append(f"      valeur dans ce paquet : {valeur}")
+        else:
+            lignes.append("      valeur dans ce paquet : non extraite")
+        lignes.append("")
+    lignes += ["-" * 46,
+               "Chaque fait ci-dessus est mesure. Les valeurs absentes sont ecrites comme",
+               "absentes plutot que devinees : l'incertitude fait partie de l'information.",
+               "", "FlowScope - capturer, analyser, comprendre, expliquer."]
+    return "\n".join(lignes)
+
+
+def vers_pdf_couche(couche: dict[str, Any], valeurs: dict[str, Any] | None = None,
+                    horodatage: str = "") -> bytes:
+    """Rend l'explication d'une couche en PDF, avec fpdf2 - Python pur, sans dépendance système.
+
+    Un PDF est le format qu'on remet a quelqu'un : il s'ouvre partout, il a la meme tete partout,
+    et il ne se modifie pas par accident. C'est le format d'un document, pas d'une donnee.
+    """
+    from fpdf import FPDF
+
+    valeurs = valeurs or {}
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    def texte(contenu: str, taille: int = 11, style: str = "", hauteur: float = 6) -> None:
+        pdf.set_font("helvetica", style, taille)
+        pdf.multi_cell(0, hauteur, _latin1(contenu), new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_font("helvetica", "B", 20)
+    pdf.cell(0, 12, "FlowScope", new_x="LMARGIN", new_y="NEXT")
+    texte("Capturer, analyser, comprendre, expliquer", 10)
+    pdf.ln(4)
+    pdf.set_draw_color(109, 141, 255)
+    pdf.set_line_width(0.8)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(6)
+
+    texte(f"Couche : {couche.get('nom', '?')}", 15, "B", 9)
+    if horodatage:
+        texte(f"Document produit le {horodatage}", 9)
+    pdf.ln(3)
+
+    texte("Ce que fait cette couche", 13, "B", 8)
+    texte(str(couche.get("role", "")))
+    pdf.ln(3)
+
+    texte("Les champs qu'elle porte", 13, "B", 8)
+    for champ in couche.get("champs", []):
+        libelle = champ.get("libelle", "?")
+        octets = champ.get("octets", "?")
+        texte(f"- {libelle} ({octets} octet(s))", 11, "B", 6)
+        valeur = valeurs.get(champ.get("source")) if champ.get("source") else None
+        if valeur not in (None, ""):
+            texte(f"    Valeur dans ce paquet : {valeur}", 10, "", 5)
+        else:
+            texte("    Valeur dans ce paquet : non extraite", 10, "", 5)
+        pdf.ln(1)
+
+    pdf.ln(4)
+    texte("Chaque ligne ci-dessus est un fait mesure, jamais une deduction. Les valeurs que",
+          9, "", 4.5)
+    texte("FlowScope n'a pas pu extraire sont ecrites comme absentes plutot que devinees :",
+          9, "", 4.5)
+    texte("l'incertitude fait partie de l'information et ne se cache pas.", 9, "", 4.5)
+
+    sortie = pdf.output()
+    return bytes(sortie)
+
+
+def vers_csv_couche(couche: dict[str, Any], valeurs: dict[str, Any] | None = None) -> str:
+    """Rend les champs d'une couche en CSV, une ligne par champ.
+
+    Cette fonction est distincte de `vers_csv`, et ce n'est pas un doublon : `vers_csv` a des
+    colonnes FIXES par vue (paquets, communications, detections), parce qu'un tableau exporte
+    doit avoir la meme forme a chaque fois. Une couche, elle, a un nombre de champs variable
+    selon la couche. Lui imposer les colonnes d'une autre vue aurait produit un fichier aux
+    colonnes vides, ou une erreur. Deux besoins differents, deux fonctions.
+
+    Le point-virgule et le BOM sont ceux de `vers_csv` : c'est ce qu'attend un tableur
+    francais, ou la virgule est un separateur decimal.
+    """
+    valeurs = valeurs or {}
+    tampon = io.StringIO()
+    ecrivain = csv.writer(tampon, delimiter=";", lineterminator="\r\n", quoting=csv.QUOTE_ALL)
+    ecrivain.writerow(["Couche", "Champ", "Octets", "Valeur dans ce paquet", "Origine de la valeur"])
+    for champ in couche.get("champs", []):
+        source = champ.get("source")
+        valeur = valeurs.get(source) if source else None
+        ecrivain.writerow([
+            _cellule(couche.get("nom")),
+            _cellule(champ.get("libelle")),
+            _cellule(champ.get("octets")),
+            _cellule(valeur) if valeur not in (None, "") else "non extraite",
+            _cellule(source) if source else "non extraite",
+        ])
+    return "\ufeff" + tampon.getvalue()

@@ -14,8 +14,11 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 import datetime as dt
+import io
+import zipfile
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel
 
 from backend.securite import verifier_jeton
 
@@ -484,3 +487,81 @@ def sante() -> dict[str, Any]:
         "base_de_connaissances": {"services": moteur_explication.services_connus()},
         "enrichissement": obtenir_enrichissement().etat(),
     }
+
+class DemandeExportCouche(BaseModel):
+    """Ce que l'interface envoie pour telecharger l'explication d'une couche.
+
+    L'interface n'envoie PAS la description de la couche : seulement sa cle. La connaissance
+    reste au serveur, et le fichier produit ne peut donc pas contenir autre chose que ce que
+    le serveur sait. Un client qui enverrait sa propre description pourrait faire ecrire
+    n'importe quoi dans un document presente comme celui de FlowScope.
+    """
+
+    cle: str
+    valeurs: dict[str, Any] = {}
+    formats: list[str] = ["txt"]
+
+
+@router.post("/layers/export", summary="Telecharger l'explication d'une couche")
+def exporter_couche(demande: DemandeExportCouche) -> Response:
+    """Rend l'explication d'une couche en fichier, dans les formats demandes.
+
+    Un seul format demande : on rend le fichier lui-meme, avec son type et son nom. Plusieurs
+    formats : on rend une archive ZIP qui les contient tous, parce qu'un navigateur qui recoit
+    quatre fichiers d'un coup en bloque trois et l'utilisateur ne comprend pas pourquoi. Un
+    fichier unique est toujours ce qui arrive le mieux.
+
+    Un format inconnu est REFUSE (400), jamais ignore en silence : l'utilisateur qui coche une
+    case doit obtenir le fichier correspondant, ou savoir pourquoi il ne l'obtient pas.
+    """
+    formats_connus = ("pdf", "json", "csv", "txt")
+    demandes = [f for f in (demande.formats or ["txt"]) if f]
+    if not demandes:
+        raise HTTPException(status_code=400, detail="Aucun format demande.")
+    inconnus = [f for f in demandes if f not in formats_connus]
+    if inconnus:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Format inconnu : {', '.join(inconnus)}. "
+                   f"Formats acceptes : {', '.join(formats_connus)}.")
+
+    couche = next((c for c in mod_couches.description().get("couches", [])
+                   if c.get("cle") == demande.cle), None)
+    if couche is None:
+        raise HTTPException(status_code=404, detail=f"Couche inconnue : {demande.cle}")
+
+    horodatage = dt.datetime.now().strftime("%d/%m/%Y %H:%M")
+    horodatage_fichier = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    produit: dict[str, bytes] = {}
+    for format_ in demandes:
+        if format_ == "pdf":
+            produit["pdf"] = mod_export.vers_pdf_couche(couche, demande.valeurs, horodatage)
+        elif format_ == "txt":
+            produit["txt"] = mod_export.vers_texte_couche(
+                couche, demande.valeurs, horodatage).encode("utf-8")
+        elif format_ == "json":
+            produit["json"] = mod_export.vers_json(
+                [{"couche": couche, "valeurs": demande.valeurs}],
+                f"couche-{demande.cle}").encode("utf-8")
+        else:
+            produit["csv"] = mod_export.vers_csv_couche(
+                couche, demande.valeurs).encode("utf-8")
+
+    types = {"pdf": "application/pdf", "json": "application/json",
+             "csv": "text/csv; charset=utf-8", "txt": "text/plain; charset=utf-8"}
+
+    if len(produit) == 1:
+        format_, contenu = next(iter(produit.items()))
+        nom = mod_export.nom_de_fichier(f"couche-{demande.cle}", format_, horodatage_fichier)
+        return Response(content=contenu, media_type=types[format_], headers={
+            "Content-Disposition": f'attachment; filename="{nom}"'})
+
+    tampon = io.BytesIO()
+    with zipfile.ZipFile(tampon, "w", zipfile.ZIP_DEFLATED) as archive:
+        for format_, contenu in sorted(produit.items()):
+            nom = mod_export.nom_de_fichier(f"couche-{demande.cle}", format_, horodatage_fichier)
+            archive.writestr(nom, contenu)
+    nom = mod_export.nom_de_fichier(f"couche-{demande.cle}", "zip", horodatage_fichier)
+    return Response(content=tampon.getvalue(), media_type="application/zip", headers={
+        "Content-Disposition": f'attachment; filename="{nom}"'})
+

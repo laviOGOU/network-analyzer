@@ -35,3 +35,4 @@ pytest>=8.0,<10
 # Nommer le programme qui tient un port local. Facultatif : son absence désactive
 # seulement l'affichage du programme, sans rien casser.
 psutil>=5.9
+fpdf2>=2.8
