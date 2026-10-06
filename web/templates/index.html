@@ -402,11 +402,17 @@
      Trois zones, visibles ensemble et nommées comme dans les outils de référence : la liste
      des paquets, le détail du paquet sélectionné, le contenu du paquet. Les empiler dans une
      fenêtre qu'il faut ouvrir obligerait à retenir ce qu'on vient de quitter. #}
+  {# Détail d'un paquet : il ne s'affiche plus sous le tableau mais dans une fenêtre, ouverte au
+     clic sur une couche. Le bloc lui-même est INCHANGÉ — mêmes identifiants, donc les
+     vérifications qui le surveillent continuent de le surveiller, et l'oublier ne réécrit rien.
+     <dialog> est natif : Échap ferme, le focus est piégé dans la fenêtre, et le reste de la page
+     devient inerte pour les lecteurs d'écran sans une ligne de JavaScript supplémentaire. #}
+  <dialog class="fenetre" id="fenetre-paquet" aria-labelledby="paquet-detail-titre">
   <div class="paquet-detail" id="paquet-detail" data-vue="paquets" aria-labelledby="paquet-detail-titre">
     <div class="detail-entete">
       <h3 id="paquet-detail-titre">Détail du paquet sélectionné</h3>
       <button type="button" class="bouton bouton--fantome" id="paquet-detail-fermer">
-        Vider la sélection
+        Fermer
       </button>
     </div>
 
@@ -426,6 +432,20 @@
       <pre class="hex" id="paquet-hex"></pre>
     </div>
   </div>
+
+    <div class="fenetre__pied">
+      <label class="sr-only" for="couche-a-telecharger">Couche à télécharger</label>
+      <select id="couche-a-telecharger" class="choix-profil"></select>
+      <fieldset class="fenetre__formats" aria-label="Formats à télécharger">
+        <label><input type="checkbox" value="pdf" checked> PDF</label>
+        <label><input type="checkbox" value="json" checked> JSON</label>
+        <label><input type="checkbox" value="csv"> CSV</label>
+        <label><input type="checkbox" value="txt"> TXT</label>
+      </fieldset>
+      <button type="button" class="bouton" id="bouton-telecharger">Télécharger</button>
+      <p class="aide" id="telechargement-etat" role="status"></p>
+    </div>
+  </dialog>
 
   <div class="paquet-detail" id="recit-detail" hidden aria-labelledby="recit-titre">
     <div class="detail-entete">

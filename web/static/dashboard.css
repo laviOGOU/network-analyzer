@@ -1377,3 +1377,35 @@ main {
 .pastille-etat[data-certain="non"] { border-style: dashed; }
 .pastille-etat[data-certain="non"]::after { content: " ?"; font-weight: 700; }
 .col-note { white-space: normal; min-width: 16rem; color: var(--texte-doux); }
+
+
+/* ---------------------------------------------------------------- les fenêtres
+   <dialog> est natif : le navigateur fournit le piégeage du focus, la touche Échap et
+   l'inertie du reste de la page pour les lecteurs d'écran. On ne redéfinit donc que
+   l'apparence, et on le laisse faire ce qu'il fait mieux que nous. */
+.fenetre {
+  width: min(920px, 92vw);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 1.25rem;
+  border: 1px solid var(--bord);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--texte);
+}
+
+.fenetre::backdrop { background: rgba(3, 5, 12, .72); backdrop-filter: blur(2px); }
+
+.fenetre__pied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .75rem 1rem;
+  margin-top: 1rem;
+  padding-top: .85rem;
+  border-top: 1px solid var(--bord);
+}
+
+.fenetre__formats { display: flex; flex-wrap: wrap; gap: .5rem 1rem; border: 0; margin: 0; }
+.fenetre__formats label { display: inline-flex; align-items: center; gap: .35rem; cursor: pointer; }
+.fenetre__formats input { accent-color: var(--accent); }

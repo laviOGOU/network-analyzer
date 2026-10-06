@@ -1189,6 +1189,10 @@ function signalerCriteresEcartes(champs) {
     fermer: document.getElementById("paquet-detail-fermer"),
     vide: document.getElementById("paquet-detail-vide"),
     contenu: document.getElementById("paquet-detail-contenu"),
+    fenetre: document.getElementById("fenetre-paquet"),
+    choixCouche: document.getElementById("couche-a-telecharger"),
+    boutonTelecharger: document.getElementById("bouton-telecharger"),
+    etatTelechargement: document.getElementById("telechargement-etat"),
   };
   if (!zone.panneau) return;
 
@@ -1200,9 +1204,24 @@ function signalerCriteresEcartes(champs) {
     if (zone.contenu) zone.contenu.hidden = true;
   }
 
+  // Le contenu se montre ET la fenêtre s'ouvre : c'est le seul endroit où le détail devient
+  // visible, donc le seul endroit où il faut ouvrir. Le faire ailleurs aurait laissé passer
+  // les cas où le contenu s'affiche sans fenêtre — ou l'inverse.
   function montrerContenu() {
     if (zone.vide) zone.vide.hidden = true;
     if (zone.contenu) zone.contenu.hidden = false;
+    if (zone.fenetre && !zone.fenetre.open) zone.fenetre.showModal();
+    // Le sélecteur du pied de fenêtre liste les couches RÉELLEMENT affichées, lues dans le
+    // document : il ne peut donc pas proposer une couche absente du paquet, ni en oublier une.
+    if (zone.choixCouche && zone.couches) {
+      zone.choixCouche.textContent = "";
+      zone.couches.querySelectorAll(".couche[data-cle]").forEach((bloc) => {
+        const option = document.createElement("option");
+        option.value = bloc.dataset.cle;
+        option.textContent = bloc.dataset.cle;
+        zone.choixCouche.appendChild(option);
+      });
+    }
   }
 
   montrerAttente();
@@ -1261,6 +1280,10 @@ function signalerCriteresEcartes(champs) {
     for (const couche of connaissance.couches) {
       const bloc = document.createElement("section");
       bloc.className = "couche";
+      // La clé de la couche voyage avec son bloc : le sélecteur du pied de fenêtre s'en sert
+      // pour dire au serveur QUELLE couche télécharger. Sans elle, il faudrait la retrouver
+      // par le nom affiché — et un nom affiché n'est pas un identifiant.
+      bloc.dataset.cle = couche.cle;
 
       const nom = document.createElement("h5");
       nom.className = "couche__nom";
@@ -1346,7 +1369,12 @@ function signalerCriteresEcartes(champs) {
     // rien à annoncer, puisque la zone était déjà à l'écran. Voler le focus de la ligne
     // qu'on vient de cliquer ferait perdre sa place à qui navigue au clavier.
     montrerContenu();
-    boutonOrigine = bouton;
+      // On mémorise le RANG de la ligne, pas l'élément : le tableau est reconstruit toutes
+      // les trois secondes, et un élément mémorisé est alors détaché du document — focus()
+      // sur un élément détaché ne fait rien, sans erreur ni trace. Un rang, lui, se retrouve.
+      const rangee = bouton.closest("tr");
+      const parent = rangee ? rangee.parentElement : null;
+      boutonOrigine = { rang: parent ? [...parent.children].indexOf(rangee) : -1 };
   }
 
   function fermer() {
@@ -1356,7 +1384,25 @@ function signalerCriteresEcartes(champs) {
     zone.resume.textContent = "";
     zone.avertissement.textContent = "";
     paquetCourant = null;
-    if (boutonOrigine) { boutonOrigine.focus(); boutonOrigine = null; }
+    // On ferme la fenêtre native. Échap la ferme aussi, sans passer par ici : l'événement
+    // « close » ramène alors le focus, sinon un lecteur au clavier le perdrait dans le vide.
+    if (zone.fenetre && zone.fenetre.open) zone.fenetre.close();
+    // Le tableau est reconstruit toutes les trois secondes : le bouton mémorisé au moment du
+    // clic peut avoir été remplacé entre-temps, et focus() sur un élément détaché du document
+    // ne fait RIEN — sans erreur, sans avertissement. On vérifie donc qu'il est encore dans la
+    // page avant de lui rendre le focus. Sinon, le focus va au filtre : jamais nulle part,
+    // sinon un lecteur au clavier repart du début de la page.
+      const tableau = document.getElementById("tableau-paquets");
+      const retrouve = tableau && boutonOrigine && boutonOrigine.rang >= 0
+        ? tableau.querySelectorAll(".bouton-couches")[boutonOrigine.rang] || null
+        : null;
+      if (retrouve) {
+        retrouve.focus();
+    } else {
+      const repli = document.getElementById("champ-filtre");
+      if (repli) repli.focus();
+    }
+    boutonOrigine = null;
   }
 
   // Les lignes du tableau des paquets sont reconstruites à chaque rafraîchissement : on
@@ -1370,9 +1416,69 @@ function signalerCriteresEcartes(champs) {
     if (paquet) ouvrir(paquet, bouton);
   });
 
+  // Échap ferme une fenêtre native sans passer par le bouton : il faut donc ramener le focus
+  // et oublier le paquet courant sur l'événement « close », sinon le clavier resterait dans
+  // une fenêtre disparue. fermer() est rappelée, et son garde-fou l'empêche de se rappeler
+  // elle-même indéfiniment.
+  if (zone.fenetre) {
+    zone.fenetre.addEventListener("close", () => { if (paquetCourant) fermer(); });
+  }
+
+  if (zone.boutonTelecharger) {
+    zone.boutonTelecharger.addEventListener("click", async () => {
+      const formats = [...document.querySelectorAll(".fenetre__formats input:checked")]
+        .map((case_) => case_.value);
+      if (!formats.length) {
+        zone.etatTelechargement.textContent = "Choisissez au moins un format.";
+        zone.etatTelechargement.dataset.etat = "erreur";
+        return;
+      }
+      const cle = zone.choixCouche && zone.choixCouche.value;
+      if (!cle) {
+        zone.etatTelechargement.textContent = "Aucune couche à télécharger.";
+        zone.etatTelechargement.dataset.etat = "erreur";
+        return;
+      }
+      zone.boutonTelecharger.disabled = true;
+      zone.etatTelechargement.dataset.etat = "";
+      zone.etatTelechargement.textContent = "Préparation du fichier…";
+      try {
+        const reponse = await fetch("/api/v1/layers/export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cle: cle, valeurs: paquetCourant || {}, formats: formats }),
+        });
+        if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
+        const contenu = await reponse.blob();
+        const entete = reponse.headers.get("Content-Disposition") || "";
+        const trouve = entete.match(/filename="([^"]+)"/);
+        const lien = document.createElement("a");
+        lien.href = URL.createObjectURL(contenu);
+        lien.download = trouve ? trouve[1] : `flowscope-${cle}.zip`;
+        document.body.appendChild(lien);
+        lien.click();
+        lien.remove();
+        URL.revokeObjectURL(lien.href);
+        zone.etatTelechargement.textContent =
+          formats.length > 1
+            ? `${formats.length} formats réunis dans une archive.`
+            : "Fichier téléchargé.";
+      } catch (erreur) {
+        zone.etatTelechargement.textContent = `Téléchargement impossible : ${erreur.message}`;
+        zone.etatTelechargement.dataset.etat = "erreur";
+      } finally {
+        zone.boutonTelecharger.disabled = false;
+      }
+    });
+  }
+
   zone.fermer.addEventListener("click", fermer);
   document.addEventListener("keydown", (evenement) => {
-    if (evenement.key === "Escape" && !zone.panneau.hidden) fermer();
+    // C'est la FENÊTRE qui dit si elle est ouverte, plus le panneau : un <dialog> fermé
+    // garde son contenu dans le document, donc zone.panneau.hidden reste faux en
+    // permanence. Sans ce test, ce gestionnaire se déclenchait à CHAQUE Échap de la
+    // page — y compris celui du détail des communications, dont il volait le focus.
+    if (evenement.key === "Escape" && zone.fenetre && zone.fenetre.open) fermer();
   });
 })();
 
