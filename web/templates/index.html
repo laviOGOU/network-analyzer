@@ -96,18 +96,7 @@
 
   {# Export : de simples liens de téléchargement, sans JavaScript. Le filtre courant
      leur est ajouté par le script, pour qu'on exporte exactement ce qu'on voit. #}
-  <div class="exports">
-    <span class="exports__intitule">Exporter ce qui est affiché :</span>
-    <a class="bouton bouton--fantome" id="export-communications-csv"
-       href="/api/v1/export?quoi=communications&amp;format=csv" download>Communications · CSV</a>
-    <a class="bouton bouton--fantome" id="export-communications-json"
-       href="/api/v1/export?quoi=communications&amp;format=json" download>Communications · JSON</a>
-    <a class="bouton bouton--fantome" id="export-paquets-csv"
-       href="/api/v1/export?quoi=paquets&amp;format=csv" download>Paquets · CSV</a>
-    <a class="bouton bouton--fantome" id="export-detections-json"
-       href="/api/v1/export?quoi=detections&amp;format=json" download>Détections · JSON</a>
-  </div>
-  </section>
+    </section>
 
 {# Légende des couleurs. Elle réutilise les classes des pastilles réellement affichées :
    si une couleur change dans la feuille de style, la légende change avec elle. Une

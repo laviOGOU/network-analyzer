@@ -442,9 +442,15 @@ function verifier(intitule, condition, precision = "") {
     volet.visible && volet.attente && volet.couches === 0,
     `volet visible=${volet.visible} attente=${volet.attente} couches=${volet.couches}`);
 
-  // L'export : un lien de téléchargement, qui suit le filtre courant.
-  const lienExport = await page.locator("#export-communications-csv").getAttribute("href");
-  verifier("les liens d'export sont présents", /quoi=communications/.test(lienExport || ""));
+  // LES EXPORTS ONT QUITTÉ LA BARRE DE FILTRE, À LA DEMANDE DE L'AUTEUR DU PROJET.
+  // Ils vivent maintenant DANS LA FENÊTRE de détail d'un paquet : on coche les formats voulus
+  // et l'on télécharge l'explication d'une couche. Le contrôle vise donc la nouvelle surface.
+  // L'ancien contrôle n'aurait mesuré que l'absence des liens supprimés — c'est-à-dire rien.
+  const cases = await page.locator(".fenetre__formats input").count();
+  const boutonTelecharger = await page.locator("#bouton-telecharger").count();
+  verifier("l'export d'une couche est atteignable depuis la fenêtre",
+    cases === 4 && boutonTelecharger === 1,
+    `${cases} format(s) · ${boutonTelecharger} bouton de téléchargement`);
 
   const reponseExport = await page.request.get(
     `${adresse}/api/v1/export?quoi=communications&format=csv`);
