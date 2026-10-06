@@ -28,6 +28,12 @@ pydantic>=2.9,<3
 
 httpx>=0.27,<1
 jinja2>=3.1,<4
+# LE PILOTE POSTGRESQL. Il manquait ici : installe dans le venv par uv, jamais declare, donc
+# absent de l'image de production. L'application demarrait quand meme et echouait a la
+# premiere requete touchant la base - un 500 sans explication. Un paquet installe n'est pas
+# un paquet declare, et seul le fichier compte pour une image construite ailleurs.
+# En variante binaire : aucune compilation, donc une image qui se construit en une minute.
+psycopg[binary]>=3.2,<4
 python-dotenv>=1.0,<2
 
 pytest>=8.0,<10
