@@ -139,10 +139,13 @@
 /* Le logo porte sa propre lueur : une ombre portée colorée, très diffuse, qui imite la
    lumière du logo sans alourdir le fichier SVG. */
 .entete__logo {
-  width: 60px;
-  height: 60px;
+  width: 68px;
+  height: 68px;
   flex: 0 0 auto;
-  filter: drop-shadow(0 0 10px rgba(34, 211, 238, .35));
+  /* L'ombre portée était restée CYAN, de l'ancienne identité : voilà le halo verdâtre qui
+     flottait en haut à droite et ne ressemblait à rien. Elle suit maintenant le vert du
+     thème, et elle est plus discrète — une lueur, pas une tache. */
+  filter: drop-shadow(0 0 7px rgba(63, 217, 127, .22));
 }
 
 .entete__nom {
@@ -320,9 +323,27 @@ h1, h2, h3, h4 {
   letter-spacing: -.02em;
 }
 
+/* Les titres de section : monospace, capitales, très espacées, et nettement plus grands que
+   le texte. C'est la convention des interfaces techniques soignées, et elle donne à la page
+   une charpente lisible d'un seul regard — chaque section s'annonce au lieu de se fondre. */
 .titre-section {
-  font-size: clamp(1.25rem, 1.1rem + .8vw, 1.65rem);
-  font-weight: 700;
+  font-size: clamp(1.05rem, .95rem + .5vw, 1.3rem);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--texte);
+}
+
+/* Le petit trait vertical qui précède le titre : un repère de plus, et il coûte deux lignes. */
+.titre-section::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: .95em;
+  margin-right: .55rem;
+  vertical-align: -0.1em;
+  background: var(--accent);
+  border-radius: 2px;
 }
 
 /* Les étiquettes du terminal : monospace, capitales, très espacées. C'est la marque du
@@ -461,6 +482,25 @@ code {
 }
 
 .ligne-vide td { text-align: center; color: var(--texte-doux); padding: 1.5rem .5rem; }
+
+/* Les éléments de l'en-tête ne se laissent pas écraser : « Connexion… » était tronqué
+   parce que le bloc acceptait de rétrécir jusqu'à couper son texte. Un état tronqué ne dit
+   plus rien, et c'est justement l'information qu'on vient chercher. */
+.entete__actions {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.entete__actions > * { flex: 0 0 auto; }
+
+.etat-connexion,
+.etiquette {
+  white-space: nowrap;
+  max-width: none;
+}
 
 /* Le détail d'un paquet est un panneau permanent, pas une fenêtre : les trois zones se
    lisent ensemble, comme dans les outils de référence. */

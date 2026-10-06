@@ -413,8 +413,11 @@
     enPause = !enPause;
     el.pause.setAttribute("aria-pressed", enPause ? "true" : "false");
     el.pause.textContent = enPause ? "Reprendre" : "Pause";
+    // À la reprise, on n'écrit pas « Connexion… » : la connexion n'a jamais été coupée, seul
+    // l'affichage était figé. Le prochain chargement posera de lui-même le compte de paquets,
+    // et d'ici là le lecteur doit voir autre chose qu'un mot faux.
     majEtat(enPause ? "pause" : "attente",
-            enPause ? "En pause — l'affichage est figé" : "Connexion…");
+            enPause ? "En pause — l'affichage est figé" : "Reprise de l'affichage…");
     if (!enPause) charger();
   });
 

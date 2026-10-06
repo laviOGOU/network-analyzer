@@ -26,7 +26,7 @@
     <!-- La lueur : c'est elle qui donne au logo son aspect lumineux. Sans elle, le tracé
          paraît plat sur un fond sombre. -->
     <filter id="fs-lueur" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="5" result="flou"/>
+      <feGaussianBlur stdDeviation="3.5" result="flou"/>
       <feMerge>
         <feMergeNode in="flou"/>
         <feMergeNode in="SourceGraphic"/>
@@ -40,19 +40,19 @@
          deux pointes — un trait d'épaisseur constante se terminerait en rond. -->
     <path fill="url(#fs-oeil)" fill-rule="evenodd"
           d="M2 100 C 44 52, 156 52, 198 100 C 156 148, 44 148, 2 100 Z
-             M2 100 C 46 72, 154 72, 198 100 C 154 128, 46 128, 2 100 Z"/>
+             M2 100 C 46 68, 154 68, 198 100 C 154 132, 46 132, 2 100 Z"/>
 
     <!-- L'IRIS : un anneau, nettement plus mince que le trait de l'œil. -->
-    <circle cx="100" cy="100" r="46" fill="none" stroke="url(#fs-iris)" stroke-width="9"/>
+    <circle cx="100" cy="100" r="46" fill="none" stroke="url(#fs-iris)" stroke-width="11"/>
 
     <!-- LE SIGNAL : cinq barres, la plus haute au centre. Elles montent puis redescendent —
          c'est un niveau, pas un histogramme. -->
     <g fill="url(#fs-barres)">
-      <rect x="72"  y="80" width="12" height="26" rx="6"/>
-      <rect x="88"  y="68" width="12" height="38" rx="6"/>
-      <rect x="104" y="56" width="12" height="50" rx="6"/>
-      <rect x="120" y="64" width="12" height="42" rx="6"/>
-      <rect x="136" y="78" width="12" height="28" rx="6"/>
+      <rect x="72"  y="80" width="14" height="26" rx="6"/>
+      <rect x="88"  y="68" width="14" height="38" rx="6"/>
+      <rect x="104" y="56" width="14" height="50" rx="6"/>
+      <rect x="120" y="64" width="14" height="42" rx="6"/>
+      <rect x="136" y="78" width="14" height="28" rx="6"/>
     </g>
 
     <!-- LE REFLET : un croissant clair en haut à droite de l'iris. C'est le détail qui fait
