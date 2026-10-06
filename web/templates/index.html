@@ -48,15 +48,6 @@
   </div>
 </header>
 
-{# Avertissement visible : le tableau de bord est public et les adresses affichées
-   appartiennent à un réseau réel. #}
-<div class="avertissement" role="note">
-  <strong>Données réelles, page publique.</strong>
-  Cette page montre les adresses IP, les ports et les noms de domaines observés sur un
-  réseau local. Aucun contenu de message n'est conservé — uniquement des métadonnées.
-  Ne capturez que sur un réseau que vous administrez ou pour lequel vous disposez d'une
-  autorisation écrite.
-</div>
 
 {# Barre de filtre d'affichage. Elle agit sur les trois listes à la fois — paquets,
    communications, détections — parce qu'un filtre qui ne s'appliquerait qu'à une partie
@@ -565,9 +556,19 @@
 </main>
 
 <footer class="pied">
+{# Avertissement visible : le tableau de bord est public et les adresses affichées
+   appartiennent à un réseau réel. #}
+<div class="avertissement" role="note">
+  <strong>Données réelles, page publique.</strong>
+  Cette page montre les adresses IP, les ports et les noms de domaines observés sur un
+  réseau local. Aucun contenu de message n'est conservé — uniquement des métadonnées.
+  Ne capturez que sur un réseau que vous administrez ou pour lequel vous disposez d'une
+  autorisation écrite.
+</div>
+
   <p>Exercice de formation — analyse de trafic réseau. Les explications sont produites par
      un moteur de règles déterministe : les mêmes paquets donnent toujours les mêmes
-     phrases. La détection et l'enrichissement arrivent dans les phases suivantes.</p>
+     phrases. La détection et l'enrichissement par API externe sont en place.</p>
 </footer>
 
 {# Mise en forme d'une détection, recopiée par le JavaScript. #}
