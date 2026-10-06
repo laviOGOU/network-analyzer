@@ -155,13 +155,22 @@
   line-height: 1.1;
 }
 
-/* « Scope » porte le dégradé du logo. La couleur pleine sert de repli : un navigateur qui
-   ignore `background-clip` afficherait sinon du texte transparent — c'est-à-dire rien. */
+/* « Scope » porte le dégradé du thème — deux intensités du même vert phosphore, comme dans
+   Matrix il n'y a qu'une couleur et ses nuances. La couleur pleine sert de repli : un
+   navigateur qui ignore `background-clip` afficherait sinon du texte transparent, c'est-à-dire
+   rien du tout. */
 .entete__nom-suite {
   color: var(--accent-2);
   background-image: linear-gradient(100deg, var(--accent) 0%, var(--accent-2) 100%);
   -webkit-background-clip: text;
   background-clip: text;
+}
+
+/* Le mot lui-même : serré et lourd, comme les titres des sites de référence. C'est
+   l'espacement négatif qui donne cette impression de bloc, pas la graisse seule. */
+.entete__nom {
+  letter-spacing: -.025em;
+  font-weight: 800;
 }
 
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
@@ -283,6 +292,66 @@ body.guide-ouvert { overflow: hidden; }
 }
 
 .vue-onglet:focus-visible { outline: 2px solid var(--primaire); outline-offset: -2px; }
+
+/* ------------------------------------------------------------------ thème Matrix
+   Le fond est ce qui installe l'ambiance, et c'est aussi ce qui se rate le plus vite : trop
+   marqué, il rend le texte illisible ; trop discret, il ne se voit pas. Trois couches très
+   légères plutôt qu'une seule forte — une grille, un halo, une trame — dont aucune ne
+   dépasse quelques pour cent d'opacité. */
+body {
+  background-color: var(--fond);
+  background-image:
+    /* Le halo : une lueur verte hors du champ, qui donne de la profondeur au lieu d'aplatir. */
+    radial-gradient(120% 80% at 50% -10%, rgba(63, 217, 127, .07) 0%, transparent 60%),
+    /* La grille : le motif technique, à la limite du perceptible. */
+    linear-gradient(rgba(63, 217, 127, .022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(63, 217, 127, .022) 1px, transparent 1px);
+  background-size: 100% 100%, 34px 34px, 34px 34px;
+  background-attachment: fixed;
+}
+
+/* ------------------------------------------------------------------ typographie
+   Ce qui sépare un site soigné d'un site ordinaire tient à trois choses, et aucune n'est une
+   couleur : l'échelle des titres (franchement plus grands que le texte), leur interlignage
+   (serré), et la régularité des espacements. On les applique ici plutôt que de retoucher
+   chaque bloc un par un. */
+h1, h2, h3, h4 {
+  line-height: 1.15;
+  letter-spacing: -.02em;
+}
+
+.titre-section {
+  font-size: clamp(1.25rem, 1.1rem + .8vw, 1.65rem);
+  font-weight: 700;
+}
+
+/* Les étiquettes du terminal : monospace, capitales, très espacées. C'est la marque du
+   thème, et elle se reconnaît d'un coup d'œil sans coûter un mot de plus. */
+.titre-section,
+.detail-entete h3,
+.couches-titre {
+  font-family: var(--mono);
+}
+
+.bienvenue__titre {
+  font-size: clamp(1.5rem, 1.15rem + 1.7vw, 2.35rem);
+  font-weight: 800;
+  letter-spacing: -.03em;
+  line-height: 1.08;
+}
+
+.bienvenue__phrase {
+  font-size: clamp(1rem, .95rem + .35vw, 1.15rem);
+  line-height: 1.5;
+}
+
+/* Les chiffres du tableau de bord respirent mieux en monospace, et s'alignent en colonnes. */
+.carte__valeur,
+.mono-cellule,
+.hex,
+code {
+  font-variant-numeric: tabular-nums;
+}
 
 /* ---------------------------------------------------------- message d'accueil
    Une bannière, pas une fenêtre : elle dit où l'on est et ce que fait l'outil, puis s'efface
@@ -914,31 +983,44 @@ body.guide-ouvert { overflow: hidden; }
    ============================================================================= */
 
 :root {
-  --fond:        #0B0F19;
-  --surface:     #121826;
-  --surface-2:   #1A2131;
-  --bord:        #2A3448;
-  --texte:       #EDF1F7;
-  --texte-doux:  #A3AFC2;
-  --texte-faible:#8B98AC;
+  /* MATRIX : noir profond, vert phosphore, et rien d'autre. Un seul accent saturé, comme
+     sur les sites de référence — c'est la retenue qui fait la qualité, pas le nombre de
+     couleurs. Les teintes sont légèrement vertes jusque dans les gris : un gris neutre
+     aurait l'air d'un gris, pas d'un écran. */
+  --fond:        #04070A;
+  --surface:     #080E12;
+  --surface-2:   #0D1519;
+  --bord:        #17262B;
+  --texte:       #DCF7E8;
+  --texte-doux:  #8FB6A6;
+  --texte-faible:#6E9384;
 
   /* Bleu électrique et cyan, les couleurs du logo. Deux accents et non un seul, parce
      qu'ils ne servent pas à la même chose : le bleu porte le texte et les commandes (6,9:1
      sur ce fond), le cyan souligne sans être lu comme du texte (11:1). Le cyan sur fond clair
      serait illisible : c'est pour ça qu'il n'est pas employé pour écrire. */
-  --accent:      #4C8DFF;
-  --accent-2:    #22D3EE;
-  --accent-doux: #16213A;
-  --succes:      #4ADE80;
-  --attention:   #F0B45C;
-  --danger:      #FF7B7B;
+  /* Vert phosphore, un peu désaturé pour ne pas vibrer sur les grands aplats. Le second
+     accent est le même vert, plus clair : dans Matrix il n'y a pas deux couleurs, il y a une
+     couleur et son intensité. */
+  --accent:      #3FD97F;
+  --accent-2:    #6BFFB0;
+  --accent-doux: #0A2418;
+  --succes:      #3FD97F;
+  /* L'orange et le rouge restent : ce sont des couleurs de SENS — les niveaux d'alerte. Les
+     remplacer par du vert priverait la lecture des niveaux de toute signification. */
+  --attention:   #E8A54B;
+  --danger:      #FF6B6B;
 
   --rayon:       14px;
   --rayon-petit: 9px;
   --ombre:       0 1px 2px rgba(0,0,0,.5), 0 10px 28px rgba(0,0,0,.4);
   --transition:  170ms cubic-bezier(.22,.61,.36,1);
-  --police:      "Segoe UI", system-ui, -apple-system, sans-serif;
-  --mono:        "Cascadia Mono", "Consolas", monospace;
+  /* Deux familles, deux rôles. Le sans-serif porte la prose — c'est lui qui fait la belle
+     typographie des sites de référence, avec ses titres serrés. Le monospace porte les
+     chiffres, les adresses et les étiquettes : c'est là que naît l'impression d'un terminal,
+     sans imposer la lecture fatigante du monospace sur des paragraphes entiers. */
+  --police:      "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  --mono:        "JetBrains Mono", "Cascadia Mono", "Consolas", "SFMono-Regular", monospace;
 }
 
 /* Thème clair : soit forcé par le bouton, soit choisi par le système. */
