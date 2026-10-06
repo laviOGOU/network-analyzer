@@ -92,6 +92,19 @@ function verifier(intitule, condition, precision = "") {
   await page.waitForSelector("#accueil", { state: "hidden", timeout: 5000 });
   verifier("« Commencer » referme le guide", true);
 
+  // AUCUN IDENTIFIANT EN DOUBLE. Ce controle existe parce que le defaut s'est produit : une
+  // suppression mal bornee a duplique toute la page, et tous les identifiants se sont retrouves
+  // en double - HTML invalide, boutons inertes, et un controle sur #ouvrir-guide qui echouait
+  // en signalant « deux elements ». Une page dupliquee est invisible a la relecture du gabarit ;
+  // elle ne se voit qu'en la comptant.
+  const doublons = await page.evaluate(() => {
+    const vus = {};
+    document.querySelectorAll("[id]").forEach((n) => { vus[n.id] = (vus[n.id] || 0) + 1; });
+    return Object.entries(vus).filter(([, n]) => n > 1).map(([id, n]) => `${id}×${n}`);
+  });
+  verifier("aucun identifiant en double dans la page",
+    doublons.length === 0, doublons.slice(0, 6).join(" · ") || "aucun");
+
   // Les vues nommees : au depart, une seule est affichee, et les quatre du sujet existent.
   const vues = await page.evaluate(() => {
     const onglets = [...document.querySelectorAll(".vue-onglet")].map((o) => o.dataset.cible);
