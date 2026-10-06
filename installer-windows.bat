@@ -70,6 +70,24 @@ if exist ".venv\Scripts\python.exe" (
 
 REM ---------------------------------------------------------------- 3. dependances
 echo  [3/5] Installation des dependances (cela peut prendre une a trois minutes)...
+REM UN ENVIRONNEMENT CREE PAR UV N'A PAS PIP. C'est le cas de celui de l'auteur du projet, et
+REM `python -m pip` y repond « No module named pip » - une erreur qui n'arrive jamais sur un
+REM environnement neuf cree par python -m venv. On installe donc pip s'il manque, avec
+REM ensurepip qui est livre avec Python lui-meme : aucune connexion, aucun outil externe.
+".venv\Scripts\python.exe" -m pip --version >nul 2>&1
+if errorlevel 1 (
+    echo        pip absent de cet environnement : installation...
+    ".venv\Scripts\python.exe" -m ensurepip --upgrade >nul 2>&1
+    ".venv\Scripts\python.exe" -m pip --version >nul 2>&1
+    if errorlevel 1 (
+        echo.
+        echo  [ECHEC] Impossible d'installer pip dans l'environnement.
+        echo  Supprimez le dossier .venv et relancez ce script : il en creera un neuf.
+        pause
+        exit /b 1
+    )
+    echo        pip installe
+)
 ".venv\Scripts\python.exe" -m pip install --quiet --upgrade pip
 ".venv\Scripts\python.exe" -m pip install --quiet -r requirements.txt
 if errorlevel 1 (

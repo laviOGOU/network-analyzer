@@ -185,6 +185,15 @@ sur Supabase, en phase 5, ne touchera aucune route.
 
 ## Installation
 
+> **Vous venez de télécharger le projet ?**
+> Le guide de téléchargement est ici : **[docs/TELECHARGER-GITHUB.md](docs/TELECHARGER-GITHUB.md)**
+> puis l'installation Windows pas à pas : **[docs/INSTALLATION-WINDOWS.md](docs/INSTALLATION-WINDOWS.md)**
+
+> **Le plus court chemin, sous Windows :** décompressez l'archive, double-cliquez sur
+> `installer-windows.bat`, puis sur `lancer.bat`. Le tableau de bord s'ouvre sur
+> http://127.0.0.1:8000
+
+
 **Prérequis :** Python 3.11 ou plus, et le pilote **Npcap** sous Windows
 (https://npcap.com/#download — pendant l'installation, décocher « Restrict Npcap driver's
 access to Administrators only » si l'on souhaite capturer sans élever les droits).
