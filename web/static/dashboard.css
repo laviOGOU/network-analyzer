@@ -306,11 +306,11 @@ body.guide-ouvert { overflow: hidden; }
 body {
   background-color: var(--fond);
   background-image:
-    /* Le halo : une lueur verte hors du champ, qui donne de la profondeur au lieu d'aplatir. */
-    radial-gradient(120% 80% at 50% -10%, rgba(63, 217, 127, .07) 0%, transparent 60%),
+    /* Le halo : une lueur bleue hors du champ, qui donne de la profondeur au lieu d'aplatir. */
+    radial-gradient(120% 80% at 50% -10%, rgba(109, 141, 255, .09) 0%, transparent 60%),
     /* La grille : le motif technique, à la limite du perceptible. */
-    linear-gradient(rgba(63, 217, 127, .022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(63, 217, 127, .022) 1px, transparent 1px);
+    linear-gradient(rgba(109, 141, 255, .024) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(109, 141, 255, .024) 1px, transparent 1px);
   background-size: 100% 100%, 34px 34px, 34px 34px;
   background-attachment: fixed;
 }
@@ -1025,29 +1025,33 @@ code {
    ============================================================================= */
 
 :root {
-  /* MATRIX : noir profond, vert phosphore, et rien d'autre. Un seul accent saturé, comme
-     sur les sites de référence — c'est la retenue qui fait la qualité, pas le nombre de
-     couleurs. Les teintes sont légèrement vertes jusque dans les gris : un gris neutre
-     aurait l'air d'un gris, pas d'un écran. */
-  --fond:        #04070A;
-  --surface:     #080E12;
-  --surface-2:   #0D1519;
-  --bord:        #17262B;
-  --texte:       #DCF7E8;
-  --texte-doux:  #8FB6A6;
-  --texte-faible:#6E9384;
+  /* NOIR CYBER : bleu électrique et violet, aucune trace de vert. Un seul accent et son
+     voisin — c'est la retenue qui fait la qualité, pas le nombre de couleurs. Les gris sont
+     légèrement bleutés jusque dans les fonds : un gris neutre aurait l'air d'un gris, pas
+     d'un écran. Le bleu du thème est de la même famille que celui du logo, donc l'identité
+     et l'interface ne se combattent plus. */
+  --fond:        #05060F;
+  --surface:     #0A0C1A;
+  --surface-2:   #10132B;
+  --bord:        #1E2242;
+  --texte:       #E7EBFA;
+  --texte-doux:  #9BA4C8;
+  --texte-faible:#707A9E;
 
   /* Bleu électrique et cyan, les couleurs du logo. Deux accents et non un seul, parce
      qu'ils ne servent pas à la même chose : le bleu porte le texte et les commandes (6,9:1
      sur ce fond), le cyan souligne sans être lu comme du texte (11:1). Le cyan sur fond clair
      serait illisible : c'est pour ça qu'il n'est pas employé pour écrire. */
-  /* Vert phosphore, un peu désaturé pour ne pas vibrer sur les grands aplats. Le second
-     accent est le même vert, plus clair : dans Matrix il n'y a pas deux couleurs, il y a une
-     couleur et son intensité. */
-  --accent:      #3FD97F;
-  --accent-2:    #6BFFB0;
-  --accent-doux: #0A2418;
-  --succes:      #3FD97F;
+  /* Bleu électrique pour l'accent principal, violet pour le second : deux voisins sur la roue
+     des couleurs, ce qui donne un dégradé continu plutôt qu'un contraste. Les deux passent le
+     seuil de lisibilité sur le fond, ce qui n'était pas acquis d'avance pour du violet. */
+  --accent:      #6D8DFF;
+  --accent-2:    #B08CFF;
+  --accent-doux: #141838;
+  /* Le « succès » n'est pas vert : l'auteur du projet ne veut pas de vert, et un état de
+     connexion n'a pas besoin d'être vert pour être compris — un turquoise le dit aussi bien et
+     reste dans la palette. Le rouge et l'orange, eux, restent : ce sont des couleurs de SENS. */
+  --succes:      #35D6E8;
   /* L'orange et le rouge restent : ce sont des couleurs de SENS — les niveaux d'alerte. Les
      remplacer par du vert priverait la lecture des niveaux de toute signification. */
   --attention:   #E8A54B;
