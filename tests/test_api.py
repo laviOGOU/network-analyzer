@@ -54,10 +54,19 @@ def test_sante_sans_jeton(client):
 
 
 def test_page_principale(client):
+    """La page est servie, et elle porte l'identité du site.
+
+    Ce test a fait son travail : le site a été renommé sans lui, et il a échoué. On en profite
+    pour vérifier aussi les repères de la page — la bannière d'accueil et les vues — plutôt
+    qu'une seule chaîne. Une page qui se servirait vide passerait le contrôle du nom si le nom
+    figurait dans un coin.
+    """
     reponse = client.get("/")
 
     assert reponse.status_code == 200
-    assert "Intelligent Network Packet Analyzer" in reponse.text
+    assert "FlowScope" in reponse.text
+    assert "Bienvenue sur FlowScope" in reponse.text
+    assert 'class="vue-onglet"' in reponse.text
 
 
 def test_paquets_vides(client):
