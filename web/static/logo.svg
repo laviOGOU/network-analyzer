@@ -5,22 +5,22 @@
     <!-- Le dégradé principal, du cyan vers le bleu, du haut vers le bas : c'est lui qui donne
          à l'œil son relief. Le cyan tient le haut et les deux pointes, le bleu tient le bas. -->
     <linearGradient id="fs-oeil" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#6BFFB0"/>
-      <stop offset="45%"  stop-color="#3FD97F"/>
-      <stop offset="100%" stop-color="#1E9E5A"/>
+      <stop offset="0%"   stop-color="#2FE0F5"/>
+      <stop offset="45%"  stop-color="#22A8F0"/>
+      <stop offset="100%" stop-color="#1E5BF0"/>
     </linearGradient>
 
     <!-- L'iris : un peu plus bleu que l'œil, pour que les deux formes se distinguent là où
          elles se chevauchent. -->
     <linearGradient id="fs-iris" x1="0.2" y1="0" x2="0.8" y2="1">
-      <stop offset="0%"   stop-color="#52FFA8"/>
-      <stop offset="100%" stop-color="#2AAE68"/>
+      <stop offset="0%"   stop-color="#31C9F5"/>
+      <stop offset="100%" stop-color="#1D63EA"/>
     </linearGradient>
 
     <!-- Les barres : cyan franc, pour ressortir sur l'iris. -->
     <linearGradient id="fs-barres" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#B4FFD6"/>
-      <stop offset="100%" stop-color="#3FD97F"/>
+      <stop offset="0%"   stop-color="#7DEBFF"/>
+      <stop offset="100%" stop-color="#22A8F0"/>
     </linearGradient>
 
     <!-- La lueur : c'est elle qui donne au logo son aspect lumineux. Sans elle, le tracé
@@ -57,7 +57,7 @@
 
     <!-- LE REFLET : un croissant clair en haut à droite de l'iris. C'est le détail qui fait
          qu'un œil regarde au lieu d'être un cercle. -->
-    <path d="M124 70 A 34 34 0 0 1 138 88" fill="none" stroke="#E4FFF0"
+    <path d="M124 70 A 34 34 0 0 1 138 88" fill="none" stroke="#EAFDFF"
           stroke-width="7" stroke-linecap="round" opacity="0.9"/>
   </g>
 </svg>
