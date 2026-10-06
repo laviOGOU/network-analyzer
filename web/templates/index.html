@@ -22,8 +22,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FlowScope — Analyseur de trafic réseau</title>
-  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
-  <link rel="stylesheet" href="{{ url_for('static', path='/dashboard.css') }}">
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v={{ version_statique() }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/dashboard.css') }}?v={{ version_statique() }}">
 </head>
 <body>
 <a class="lien-evitement" href="#paquets">Aller au tableau des paquets</a>
@@ -623,6 +623,6 @@
   </tr>
 </template>
 
-<script src="{{ url_for('static', path='/dashboard.js') }}" defer></script>
+<script src="{{ url_for('static', path='/dashboard.js') }}?v={{ version_statique() }}" defer></script>
 </body>
 </html>

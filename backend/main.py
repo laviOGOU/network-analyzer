@@ -35,6 +35,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import atexit
+import hashlib
+from pathlib import Path
 
 from backend import pilotage
 from backend.api import capture, ingestion, paquets
@@ -50,6 +52,38 @@ logger = logging.getLogger("backend")
 DOSSIER_WEB = RACINE_DEPOT / "web"
 
 gabarits = Jinja2Templates(directory=str(DOSSIER_WEB / "templates"))
+
+def version_statique() -> str:
+    """Empreinte des fichiers statiques, calculée une fois au démarrage.
+
+    **Sans elle, le navigateur ne redemande jamais la feuille de style.** Servie sans numéro
+    de version, elle reste en cache — chez l'auteur comme chez le visiteur — et un changement
+    de thème n'atteint personne. Le symptôme est trompeur : le fichier est bien modifié sur le
+    disque, le serveur le sert bien, et l'écran ne bouge pas.
+
+    L'empreinte mêle les noms et les dates de modification : la moindre retouche d'un fichier
+    change l'adresse, donc force la relecture. Les autres fichiers ne changent pas d'adresse,
+    donc ils restent en cache — c'est le but.
+    """
+    racine = Path(__file__).resolve().parent.parent / "web" / "static"
+    empreinte = hashlib.sha256()
+    try:
+        for fichier in sorted(racine.rglob("*")):
+            if fichier.is_file():
+                empreinte.update(fichier.name.encode("utf-8"))
+                empreinte.update(str(fichier.stat().st_mtime_ns).encode("ascii"))
+    except OSError:
+        # Un dossier illisible ne doit pas empêcher le serveur de démarrer : on rend une
+        # empreinte neutre, et le cache reprend son cours.
+        return "0"
+    return empreinte.hexdigest()[:10]
+
+
+# L'empreinte est posée comme fonction globale des gabarits : chaque modèle peut l'appeler
+# sans qu'on ait à l'ajouter à chacun des contextes de rendu, et un modèle ajouté demain
+# l'aura sans que personne n'y pense.
+gabarits.env.globals["version_statique"] = version_statique
+
 
 application = FastAPI(
     title="FlowScope — Network Traffic Analyzer",

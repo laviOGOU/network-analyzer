@@ -6,7 +6,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ titre }} — Network Analyzer</title>
-  <link rel="stylesheet" href="{{ url_for('static', path='/dashboard.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/dashboard.css') }}?v={{ version_statique() }}">
 </head>
 <body>
   <main class="page-erreur">
