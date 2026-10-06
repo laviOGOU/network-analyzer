@@ -486,7 +486,37 @@ def sante() -> dict[str, Any]:
         "couche_ia": llm.etat(),
         "base_de_connaissances": {"services": moteur_explication.services_connus()},
         "enrichissement": obtenir_enrichissement().etat(),
+        "stockage": _diagnostic_stockage(),
     }
+
+
+def _diagnostic_stockage() -> dict[str, Any]:
+    """Dit QUEL stockage est actif et si la base repond — jamais avec quoi on s'y connecte.
+
+    Cette fonction existe parce qu'un tableau de bord en ligne renvoyait une erreur 500 sans
+    donner la moindre piste : la lecture echouait, l'ecriture aussi, et rien n'indiquait si le
+    probleme venait du code, du reseau ou de la configuration. Une page d'erreur qui ne dit rien
+    oblige a deviner, et deviner coute plus cher que mesurer.
+
+    CE QU'ELLE N'EXPOSE PAS, ET C'EST DELIBERE : ni l'adresse du serveur, ni le nom d'utilisateur,
+    ni le mot de passe. Ces trois choses ne regardent personne — pas meme un diagnostic. Seuls
+    le TYPE de stockage et la raison de l'echec sont publies, dans la limite de ce qui aide.
+
+    ELLE NE DOIT JAMAIS FAIRE ECHOUER LA ROUTE QUI L'APPELLE : /health est la route qu'on
+    interroge quand tout va mal. Si elle tombait avec la base, elle ne servirait a rien.
+    """
+    import re as _re
+
+    try:
+        depot = obtenir_stockage()
+        depot.statistiques()
+        return {"type": type(depot).__name__, "joignable": True}
+    except Exception as erreur:                      # noqa: BLE001 - on veut TOUT attraper
+        detail = f"{type(erreur).__name__} : {erreur}"
+        # Defense en profondeur : meme si une bibliotheque ecrivait la chaine de connexion
+        # dans son message, on la masque avant de la publier.
+        detail = _re.sub(r"://[^@\s]+@", "://<identifiants masques>@", detail)
+        return {"type": "inconnu", "joignable": False, "erreur": detail[:220]}
 
 class DemandeExportCouche(BaseModel):
     """Ce que l'interface envoie pour telecharger l'explication d'une couche.
