@@ -204,7 +204,11 @@
     <div class="tableau-enveloppe tableau-enveloppe--vivant">
       <table class="tableau" id="tableau-vivant">
         <caption class="sr-only">Paquets reçus en direct, du plus récent au plus ancien</caption>
-        <thead>
+        {# L'en-tête est MASQUÉ À L'ŒIL, PAS SUPPRIMÉ, à la demande de l'auteur du projet.
+           Retirer les <th> aurait cassé la lecture au lecteur d'écran : c'est par eux qu'il
+           annonce « Protocole », « Destination » avant chaque valeur. `sr-only` les sort de
+           l'affichage sans les sortir du document — la rangée disparaît, l'information reste. #}
+        <thead class="sr-only">
           <tr>
             <th scope="col">Heure</th>
             <th scope="col">Source</th>
