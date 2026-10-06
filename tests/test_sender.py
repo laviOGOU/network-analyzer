@@ -194,3 +194,29 @@ def test_adresse_sans_barre_finale():
     client = sender.ClientBackend("http://exemple.test/", "jeton")
 
     assert client.url == "http://exemple.test"
+
+
+def test_un_delai_depasse_n_est_pas_compte_comme_un_echec():
+    """Un delai depasse n'est PAS un echec : le serveur a peut-etre traite le lot.
+
+    CE CHEMIN N'ETAIT COUVERT PAR AUCUN TEST, et il a plante au premier essai reel : la branche
+    d'erreur citait `self.delai`, qui appartient au client HTTP et non a l'envoyeur. Un
+    gestionnaire d'erreur qui plante transforme une panne signalee en panne silencieuse - c'est
+    exactement ce qu'il ne doit jamais faire, et rien ne le signalait.
+
+    Le test verifie trois choses a la fois : que la branche ne plante pas, qu'elle n'incremente
+    pas le compteur d'echecs, et qu'elle incremente le sien.
+    """
+    confies = []
+
+    def destination_qui_expire(lot):
+        confies.append(lot)
+        raise sender.httpx.TimeoutException("delai depasse")
+
+    envoyeur = sender.Envoyeur(destination=destination_qui_expire)
+    envoyeur._transmettre([fiche(1)])
+
+    assert confies, "le lot a bien ete confie a la destination"
+    assert envoyeur.stats.echecs == 0, "un delai depasse n'est pas un echec"
+    assert envoyeur.stats.sans_reponse == 1, "il doit avoir son propre compteur"
+    assert "delai" in envoyeur.stats.dernier_echec.lower()

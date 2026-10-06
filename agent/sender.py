@@ -188,10 +188,14 @@ class Envoyeur:
             # On ne sait pas, au moment du delai, si le lot a ete traite. On le dit tel quel
             # plutot que de trancher : c'est la seule formulation honnete.
             self.stats.sans_reponse += 1
-            self.stats.dernier_echec = ("reponse non recue dans le delai de "
-                                        f"{self.delai:.0f} s - le serveur a peut-etre traite le lot")
-            logger.warning("Lot de %d paquets : aucune reponse dans le delai de %.0f s "
-                           "(le serveur a peut-etre traite le lot)", len(lot), self.delai)
+            # `Envoyeur` ne connait pas le delai : c'est le client HTTP qui le porte. Citer
+            # `self.delai` ici a fait planter cette branche meme, celle qui sert justement a
+            # rattraper les problemes. Un plantage dans un gestionnaire d'erreur est le pire
+            # des endroits : il transforme une panne signalee en panne silencieuse.
+            self.stats.dernier_echec = ("reponse non recue dans le delai "
+                                        "- le serveur a peut-etre traite le lot")
+            logger.warning("Lot de %d paquets : aucune reponse dans le delai "
+                           "(le serveur a peut-etre traite le lot)", len(lot))
         except Exception as erreur:                  # noqa: BLE001 — frontière réseau
             self.stats.echecs += 1
             self.stats.dernier_echec = f"{type(erreur).__name__}: {erreur}"[:200]
