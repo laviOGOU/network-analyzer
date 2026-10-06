@@ -163,7 +163,10 @@ def test_charge_utile_envoyee(monkeypatch):
     assert capture["json"]["session"] == "session-1"
     assert capture["json"]["agent"] == "poste"
     assert len(capture["json"]["paquets"]) == 1
-    assert capture["timeout"] == 5.0            # un délai est toujours posé
+    # Le delai a change (5 s ne suffisaient pas face a une base distante, voir sender.py).
+    # Ce controle ne fixe donc plus de valeur : il verifie que le client transmet BIEN
+    # SON delai. Un test qui epingle un nombre casse au premier reglage et n'apprend rien.
+    assert capture["timeout"] == client.delai            # un délai est toujours posé
 
 
 def test_une_reponse_erreur_leve(monkeypatch):

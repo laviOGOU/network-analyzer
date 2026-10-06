@@ -55,13 +55,15 @@ class Statistiques:
     envoyes: int = 0
     lots: int = 0
     echecs: int = 0
+    sans_reponse: int = 0
     abandonnes: int = 0
     dernier_echec: str = ""
     file: int = 0
 
     def resume(self) -> str:
         return (f"reçus {self.recus} · envoyés {self.envoyes} · lots {self.lots} · "
-                f"échecs {self.echecs} · abandonnés {self.abandonnes}")
+                f"échecs {self.echecs} · sans réponse {self.sans_reponse} · "
+                f"abandonnés {self.abandonnes}")
 
 
 class Envoyeur:
@@ -177,6 +179,19 @@ class Envoyeur:
             self.destination(lot)
             self.stats.envoyes += len(lot)
             self.stats.lots += 1
+        except httpx.TimeoutException as erreur:
+            # UN DELAI DEPASSE N'EST PAS UN ECHEC, ET LES CONFONDRE A COUTE CHER : l'agent
+            # annoncait « envoyes 0 · echecs 5 » alors que les 1291 paquets etaient bien arrives
+            # en base. Il abandonnait l'attente de la REPONSE ; le serveur avait deja ecrit.
+            # Un journal qui annonce des echecs inexistants apprend a ne plus le croire.
+            #
+            # On ne sait pas, au moment du delai, si le lot a ete traite. On le dit tel quel
+            # plutot que de trancher : c'est la seule formulation honnete.
+            self.stats.sans_reponse += 1
+            self.stats.dernier_echec = ("reponse non recue dans le delai de "
+                                        f"{self.delai:.0f} s - le serveur a peut-etre traite le lot")
+            logger.warning("Lot de %d paquets : aucune reponse dans le delai de %.0f s "
+                           "(le serveur a peut-etre traite le lot)", len(lot), self.delai)
         except Exception as erreur:                  # noqa: BLE001 — frontière réseau
             self.stats.echecs += 1
             self.stats.dernier_echec = f"{type(erreur).__name__}: {erreur}"[:200]
@@ -192,7 +207,12 @@ class ClientBackend:
     standard (`urllib`) ferait aussi le travail mais sans gestion de délai lisible.
     """
 
-    def __init__(self, url: str, jeton: str, delai: float = 5.0,
+    #: TRENTE SECONDES, ET PAS CINQ. Le backend local repondait en quelques millisecondes ; le
+    #: meme backend, une fois en ligne, ecrit dans une base distante - chaque communication
+    #: et chaque alerte est un aller-retour vers Francfort. Un lot de 200 paquets peut
+    #: legitimement demander plusieurs secondes, et cinq etaient insuffisants : l'agent
+    #: abandonnait l'attente alors que le serveur, lui, terminait son travail.
+    def __init__(self, url: str, jeton: str, delai: float = 30.0,
                  nom_agent: str = "agent-local", session: str = "") -> None:
         self.url = url.rstrip("/")
         self.jeton = jeton
