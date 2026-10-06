@@ -1266,6 +1266,17 @@ function signalerCriteresEcartes(champs) {
     if (source === "ttl") return octetsDeNombre(valeur, 1);
     if (source === "taille") return octetsDeNombre(valeur, 2);
     if (source === "version_ip") return valeur ? ("0" + valeur) : null;
+    // Ce que le parseur extrait et que l'interface ignorait : le type Ethernet, les numéros
+    // de séquence, la fenêtre TCP et la taille de la charge utile. Ils étaient lus sur le
+    // réseau puis jetés à l'affichage.
+    if (source === "type_ethernet") {
+      const types = { "IPv4": "08 00", "IPv6": "86 dd", "ARP": "08 06" };
+      return types[String(valeur)] || null;
+    }
+    if (source === "seq") return octetsDeNombre(valeur, 4);
+    if (source === "ack") return octetsDeNombre(valeur, 4);
+    if (source === "fenetre") return octetsDeNombre(valeur, 2);
+    if (source === "charge_utile") return octetsDeNombre(valeur, 2);
     if (source === "protocole") {
       const numeros = { TCP: "06", UDP: "11", ICMP: "01", ICMPv6: "3a", ARP: "0806" };
       const code = numeros[String(valeur)];
@@ -1329,8 +1340,18 @@ function signalerCriteresEcartes(champs) {
     for (const couche of connaissance.couches) {
       lignes.push(`--- ${couche.nom} ---`);
       for (const champ of couche.champs) {
+        // Trois cas, dans cet ordre, et aucun point d'interrogation :
+        //   1. le champ se reconstitue en octets  -> on montre les octets ;
+        //   2. il a une valeur lisible            -> on montre la valeur (« SYN, ACK ») ;
+        //   3. ni l'un ni l'autre                 -> on dit POURQUOI, en clair.
+        // Un « ?? » n'apprend rien : il occupe la place d'une information sans en donner.
         const octets = octetsDuChamp(champ.source, paquet);
-        const placement = octets || "??".padEnd(11, "?");
+        const brut = champ.source ? paquet[champ.source] : null;
+        const lisible = brut !== null && brut !== undefined && brut !== "";
+        const placement = octets
+          || (lisible ? String(brut) : null)
+          || champ.raison
+          || "non extrait de ce paquet — voir le motif d'analyse partielle";
         lignes.push(`${champ.libelle.padEnd(30, " ")} ${placement}`);
       }
     }

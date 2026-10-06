@@ -43,7 +43,8 @@ COUCHES: list[dict[str, Any]] = [
         "champs": [
             {"libelle": "MAC destination", "octets": 6, "source": "mac_destination"},
             {"libelle": "MAC source", "octets": 6, "source": "mac_source"},
-            {"libelle": "Type (IPv4, IPv6, ARP…)", "octets": 2, "source": None},
+            # Le type d'Ethernet est lu sur le réseau : on le reconstruit.
+            {"libelle": "Type (IPv4, IPv6, ARP…)", "octets": 2, "source": "type_ethernet"},
         ],
     },
     {
@@ -59,7 +60,8 @@ COUCHES: list[dict[str, Any]] = [
             {"libelle": "Protocole transporté", "octets": 1, "source": "protocole"},
             {"libelle": "Adresse source", "octets": "variable", "source": "ip_source"},
             {"libelle": "Adresse destination", "octets": "variable", "source": "ip_destination"},
-            {"libelle": "Somme de contrôle", "octets": 2, "source": None},
+            {"libelle": "Somme de contrôle", "octets": 2, "source": None,
+             "raison": "recalculée par la carte réseau — aucun octet brut n'est conservé"},
         ],
     },
     {
@@ -71,11 +73,12 @@ COUCHES: list[dict[str, Any]] = [
         "champs": [
             {"libelle": "Port source", "octets": 2, "source": "port_source"},
             {"libelle": "Port destination", "octets": 2, "source": "port_destination"},
-            {"libelle": "Numéro de séquence", "octets": 4, "source": None},
-            {"libelle": "Numéro d'acquittement", "octets": 4, "source": None},
+            {"libelle": "Numéro de séquence", "octets": 4, "source": "seq"},
+            {"libelle": "Numéro d'acquittement", "octets": 4, "source": "ack"},
             {"libelle": "Indicateurs (SYN, ACK…)", "octets": 2, "source": "flags_tcp"},
-            {"libelle": "Taille de fenêtre", "octets": 2, "source": None},
-            {"libelle": "Somme de contrôle", "octets": 2, "source": None},
+            {"libelle": "Taille de fenêtre", "octets": 2, "source": "fenetre"},
+            {"libelle": "Somme de contrôle", "octets": 2, "source": None,
+             "raison": "recalculée par la carte réseau — aucun octet brut conservé"},
         ],
     },
     {
@@ -88,7 +91,8 @@ COUCHES: list[dict[str, Any]] = [
         "champs": [
             {"libelle": "Indice applicatif (domaine, type)", "octets": "variable",
              "source": "details"},
-            {"libelle": "Charge utile", "octets": "non conservée", "source": None},
+            {"libelle": "Charge utile", "octets": "non conservée", "source": "charge_utile",
+             "raison": "contenu jamais conservé (choix du projet) — seule sa taille l'est"},
         ],
     },
 ]

@@ -400,7 +400,16 @@ function verifier(intitule, condition, precision = "") {
     `${absents} champ(s) « non extrait »`);
   const hex = (await page.locator("#paquet-hex").textContent()) || "";
   verifier("la vue des octets montre les octets connus", /[0-9a-f]{2} [0-9a-f]{2}/.test(hex));
-  verifier("la vue des octets marque les octets inconnus", hex.includes("??"));
+  // RÈGLE CHANGÉE LE 06/10/2026, À LA DEMANDE DE L'AUTEUR DU PROJET.
+  // Avant : un octet non reconstituable s'affichait « ?? ». Après : chaque champ est soit
+  // reconstitué en octets, soit montré par sa valeur (« SYN, ACK »), soit EXPLIQUÉ en clair.
+  // Un « ?? » occupe la place d'une information sans en donner aucune — c'est ce qui a été
+  // reproché à cette vue. Le contrôle garde donc la nouvelle règle, et non l'ancienne.
+  verifier("la vue des octets ne laisse plus de points d'interrogation",
+    !hex.includes("??"), hex.includes("??") ? "un « ?? » subsiste" : "aucun");
+  verifier("la vue des octets explique ce qu'elle ne peut pas reconstituer",
+    /recalculée par la carte réseau|jamais conservé/.test(hex),
+    "l'explication doit être écrite, pas sous-entendue");
   const avertissement = (await page.locator("#paquet-hex-avertissement").textContent()) || "";
   verifier("l'avertissement dit que la vue est reconstruite",
     /reconstruite/i.test(avertissement));
