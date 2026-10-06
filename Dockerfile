@@ -22,7 +22,11 @@ COPY web/ ./web/
 # Railway impose son port par la variable PORT ; l'application, elle, lit ANALYZER_PORT.
 # On fait le pont ici plutot que de modifier le code : FlowScope continue de fonctionner
 # exactement pareil en local, sans une ligne de difference.
-ENV ANALYZER_HOTE=0.0.0.0 \
+# L'APPLICATION LIT « ANALYZER_HOST », EN ANGLAIS. Une premiere version de ce fichier
+# ecrivait « ANALYZER_HOTE » : la variable n'etait jamais lue, l'application reprenait son
+# defaut (127.0.0.1) et n'ecoutait que sur elle-meme. Le conteneur tournait, Railway frappait
+# a la porte, personne ne repondait - un 502 sans le moindre message d'erreur.
+ENV ANALYZER_HOST=0.0.0.0 \
     ANALYZER_PORT=8080 \
     PYTHONUNBUFFERED=1
 
