@@ -296,4 +296,11 @@ if __name__ == "__main__":                          # pragma: no cover
     apaiser_le_journal()
     lancer_purge_periodique()
     uvicorn.run(application, host=configuration.hote, port=configuration.port,
+        # DERRIERE UN REVERSE PROXY, ET C'EST LE CAS DE TOUT HEBERGEUR EN LIGNE : le TLS est
+        # termine en amont, et la requete arrive ici en clair. Sans ces deux arguments,
+        # l'application croit qu'on l'appelle en http et fabrique des liens en http - un
+        # navigateur peut alors refuser de charger la feuille de style. Les en-tetes
+        # X-Forwarded-* sont la seule source fiable de l'adresse reellement demandee.
+        proxy_headers=True,
+        forwarded_allow_ips="*",
                 log_level="info")
