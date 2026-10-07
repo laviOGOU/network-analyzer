@@ -83,10 +83,16 @@ suffit à tout désinstaller.
 
 **Double-cliquez sur `lancer.bat`.**
 
-Votre navigateur s'ouvre sur **http://127.0.0.1:8000** et le tableau de bord apparaît.
+La fenêtre affiche `FlowScope demarre...` puis attend quelques secondes — **c'est normal**.
+Le serveur se connecte à la base de données avant d'être prêt, et avec une base distante cela
+prend dix à quinze secondes. Le lanceur sonde le port chaque seconde, et **ouvre le navigateur
+dès que le serveur répond**. Vous verrez le nombre de secondes qu'il a fallu.
 
-La fenêtre noire qui reste ouverte, c'est le serveur. **Tant qu'elle est là, FlowScope tourne.**
-Pour l'arrêter : fermez-la, ou appuyez sur `Ctrl+C`.
+Votre navigateur s'ouvre alors sur **http://127.0.0.1:8000** et le tableau de bord apparaît.
+
+**Deux fenêtres s'ouvrent.** La première affiche la marche à suivre puis peut être fermée sans
+conséquence. La seconde, minimisée et nommée **`FlowScope - serveur`**, fait tourner le serveur :
+**tant qu'elle est ouverte, FlowScope tourne**. Pour tout arrêter, fermez celle-là.
 
 ---
 
@@ -133,6 +139,11 @@ leur explication.
 **« Python n'est pas installe, ou n'est pas dans le PATH »**
 Python est installé mais Windows ne le trouve pas. Relancez l'installeur Python, choisissez
 **`Modify`**, et cochez **« Add python.exe to PATH »**.
+
+**« pip absent de cet environnement : installation... »**
+Ce n'est pas une erreur, c'est une réparation. Un environnement créé par **`uv`** au lieu de
+`python -m venv` ne contient pas pip. Le script l'installe lui-même avec `ensurepip`, livré avec
+Python, puis poursuit. Laissez-le faire.
 
 **« L'installation des dependances a echoue »**
 Pas de connexion Internet, ou un proxy d'entreprise qui bloque. Si vous êtes sur un réseau
