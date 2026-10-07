@@ -184,4 +184,13 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # ------------------------------------------------------------------ mode agent
+    # L'application se relance elle-meme pour capturer. Sans cette branche, dans un
+    # executable gele, `sys.executable` EST l'application : la commande
+    # « FlowScope.exe -m agent.main » ouvrirait une SECONDE FENETRE et ne capturerait
+    # rien du tout. Le drapeau --agent est consomme ici et n'atteint jamais l'analyseur
+    # d'arguments de l'agent, qui ne le connait pas.
+    if "--agent" in sys.argv:
+        from agent.main import main as main_agent
+        raise SystemExit(main_agent([a for a in sys.argv[1:] if a != "--agent"]))
     raise SystemExit(main())

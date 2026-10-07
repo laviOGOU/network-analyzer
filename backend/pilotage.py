@@ -223,8 +223,15 @@ class Pilote:
                     "Arrêtez-la avant d'en lancer une autre."
                 )
 
-            commande = [
-                sys.executable, "-m", "agent.main",
+            # Dans un executable gele, `sys.executable` EST l'application. La relancer avec
+            # « -m agent.main » ouvrirait une seconde fenetre et ne capturerait rien : on lui
+            # passe le drapeau qu'elle sait interpreter pour se mettre en mode agent.
+            # Hors executable, rien ne change : c'est toujours « python -m agent.main ».
+            if getattr(sys, "frozen", False):
+                commande = [sys.executable, "--agent"]
+            else:
+                commande = [sys.executable, "-m", "agent.main"]
+            commande += [
                 "--interface", interface,
                 "--backend", backend,
                 "--jeton", jeton,
