@@ -289,7 +289,15 @@ class Pilote:
             processus = capture.processus
             if processus is None or processus.poll() is not None:
                 capture.processus = None
-                return self.etat()
+                deja_arretee = True
+            else:
+                deja_arretee = False
+        # etat() reprend le verrou : l'appeler en le tenant bloquait le thread sur son propre
+        # verrou - un threading.Lock n'est pas reentrant. Le serveur restait alors fige pour
+        # toujours, et toute route touchant ce verrou ne repondait plus. Sans capture a arreter,
+        # c'est le cas le plus banal : il ne doit surtout pas passer par le verrou.
+        if deja_arretee:
+            return self.etat()
 
         processus.terminate()
         try:
