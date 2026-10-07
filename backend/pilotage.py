@@ -231,15 +231,19 @@ class Pilote:
                 commande = [sys.executable, "--agent"]
             else:
                 commande = [sys.executable, "-m", "agent.main"]
+            # Les valeurs sont collees a leur option par un signe egal (--jeton=VALEUR). Separees
+            # par un espace, un jeton qui commence par un tiret est pris pour une autre option par
+            # argparse, qui refuse alors l'appel : « argument --jeton: expected one argument ».
+            # Le meme piege guette le nom de session et le filtre.
             commande += [
-                "--interface", interface,
-                "--backend", backend,
-                "--jeton", jeton,
-                "--nom", (nom or f"interface:{interface}")[:60],
-                "--duree", str(DUREE_MAXIMALE),
+                f"--interface={interface}",
+                f"--backend={backend}",
+                f"--jeton={jeton}",
+                f"--nom={(nom or f'interface:{interface}')[:60]}",
+                f"--duree={DUREE_MAXIMALE}",
             ]
             if filtre.strip():
-                commande += ["--filtre", filtre.strip()]
+                commande += [f"--filtre={filtre.strip()}"]
 
             drapeaux = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
             try:

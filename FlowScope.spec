@@ -1,18 +1,22 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_data_files
 from PyInstaller.utils.hooks import collect_submodules
 
+datas = [('web', 'web'), ('.env.example', '.'), ('agent', 'agent')]
 hiddenimports = ['psycopg', 'psycopg_binary', 'fpdf', 'dotenv', 'psutil', 'pydantic']
+datas += collect_data_files('scapy')
 hiddenimports += collect_submodules('uvicorn')
 hiddenimports += collect_submodules('webview')
 hiddenimports += collect_submodules('backend')
 hiddenimports += collect_submodules('agent')
+hiddenimports += collect_submodules('scapy')
 
 
 a = Analysis(
     ['flowscope-desktop.py'],
     pathex=[],
     binaries=[],
-    datas=[('web', 'web'), ('.env.example', '.'), ('agent', 'agent')],
+    datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
