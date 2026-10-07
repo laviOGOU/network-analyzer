@@ -134,6 +134,46 @@ leur explication.
 
 ---
 
+## Lancer sans navigateur : la fenetre Windows
+
+Il existe une seconde facon de lancer FlowScope, pour ceux qui ne veulent ni navigateur ni
+ligne de commande : **`FlowScope.exe`**.
+
+1. Telechargez `FlowScope.exe` depuis la page des versions :
+   https://github.com/laviOGOU/network-analyzer/releases/latest
+2. Double-cliquez dessus. C'est tout : il n'y a rien a installer.
+
+**Le premier demarrage prend trente a quarante secondes.** L'executable se decompresse en
+memoire, puis se connecte a la base. Les fois suivantes sont plus rapides.
+
+### Ou il range sa configuration
+
+Dans `%LOCALAPPDATA%\FlowScope`, c'est-a-dire :
+
+```
+C:\Users\<votre nom>\AppData\Local\FlowScope\.env
+```
+
+Ce dossier survit a la fermeture de l'application. Au tout premier lancement, l'executable
+**reprend la configuration qu'il trouve a cote de lui** s'il y en a une : vous n'avez rien a
+ressaisir.
+
+### Windows affiche un avertissement au lancement
+
+C'est attendu, et ce n'est pas un virus. L'executable n'est pas signe numeriquement : Microsoft
+ne connait donc pas son editeur. Cliquez sur **Informations complementaires**, puis sur
+**Executer quand meme**. Le meme message peut apparaitre dans Chrome ou Edge au moment du
+telechargement : choisissez **Conserver**.
+
+### Ce que l'executable ne sait pas faire
+
+**Demarrer une capture.** L'application lance l'agent de capture comme un programme separe, ce
+qui n'existe plus une fois tout empaquete. L'executable sert a **consulter, analyser et
+expliquer** ce qui est deja en base.
+
+Pour capturer, utilisez `lancer.bat` et le mode navigateur, decrit plus haut : c'est l'agent
+complet, avec les treize interfaces de votre machine.
+
 ## Si quelque chose ne marche pas
 
 **« Python n'est pas installe, ou n'est pas dans le PATH »**

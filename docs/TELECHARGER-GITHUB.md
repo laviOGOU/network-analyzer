@@ -87,7 +87,8 @@ Les deux sont détaillés, avec les messages d'erreur et leur solution, dans
 | `sql/` | Le schéma de la base, pour conserver l'historique |
 | `docs/` | Documentation, dont ce guide et celui d'installation |
 | `installer-windows.bat` | L'installation automatique |
-| `lancer.bat` | Le démarrage |
+| `lancer.bat` | Le démarrage, en mode navigateur |
+| `FlowScope.exe` | L'application de bureau, sans navigateur (page des versions) |
 
 ---
 

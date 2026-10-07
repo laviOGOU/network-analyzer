@@ -193,6 +193,10 @@ sur Supabase, en phase 5, ne touchera aucune route.
 > `installer-windows.bat`, puis sur `lancer.bat`. Le tableau de bord s'ouvre sur
 > http://127.0.0.1:8000
 
+> **Sans navigateur, et sans rien installer :** téléchargez `FlowScope.exe` depuis la page des
+> [versions](https://github.com/laviOGOU/network-analyzer/releases/latest) et double-cliquez
+> dessus. Le tableau de bord s'ouvre dans une **fenêtre Windows**, sans navigateur.
+
 
 **Prérequis :** Python 3.11 ou plus, et le pilote **Npcap** sous Windows
 (https://npcap.com/#download — pendant l'installation, décocher « Restrict Npcap driver's
