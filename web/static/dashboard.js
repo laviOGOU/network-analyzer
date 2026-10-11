@@ -89,6 +89,29 @@
     return programme ? `${programme} · ${suite}` : suite;
   }
 
+  //: Drapeaux de connexion TCP, en francais.
+  //: « ACK » ne dit rien a qui n'est pas reseau. Le sigle est conserve entre parentheses :
+  //: c'est lui qu'on retrouve dans les autres outils et dans la documentation, et le faire
+  //: disparaitre rendrait la ligne inutilisable pour qui cherche une information precise.
+  const NOMS_DRAPEAUX = {
+    SYN: "demande de connexion (SYN)",
+    ACK: "accusé de réception (ACK)",
+    PSH: "données poussées (PSH)",
+    FIN: "fin de connexion (FIN)",
+    RST: "connexion réinitialisée (RST)",
+    URG: "données urgentes (URG)",
+    ECE: "congestion signalée (ECE)",
+    CWR: "congestion réduite (CWR)",
+  };
+
+  function libelleDrapeaux(drapeaux) {
+    return String(drapeaux)
+      .split(/[,\s]+/)
+      .filter(Boolean)
+      .map((drapeau) => NOMS_DRAPEAUX[drapeau.toUpperCase()] || drapeau)
+      .join(" · ");
+  }
+
   function detailSansProgramme(paquet) {
     const detail = paquet.details || {};
 
@@ -111,7 +134,7 @@
     }
     if (detail.icmp_lisible) return detail.icmp_lisible;
     if (detail.operation_arp) return `ARP ${detail.operation_arp}`;
-    if (paquet.flags_tcp) return `TCP ${paquet.flags_tcp}`;
+    if (paquet.flags_tcp) return `TCP · ${libelleDrapeaux(paquet.flags_tcp)}`;
     if (detail.tronque) return "paquet tronqué";
     return "";
   }
