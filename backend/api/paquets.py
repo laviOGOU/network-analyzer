@@ -17,9 +17,10 @@ import datetime as dt
 import io
 import zipfile
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
+from backend.api.capture import depuis_la_machine
 from backend.securite import verifier_jeton
 
 try:
@@ -312,8 +313,8 @@ def statistiques(stockage: Annotated[Stockage, Depends(obtenir_stockage)]) -> di
 @router.delete("/sessions/{identifiant}", summary="Supprimer une capture")
 def supprimer_session(
     identifiant: str,
+    request: Request,
     stockage: Annotated[Stockage, Depends(obtenir_stockage)],
-    _jeton: Annotated[None, Depends(verifier_jeton)],
 ) -> dict[str, Any]:
     """Supprime une capture et tout ce qu'elle contient.
 
@@ -321,9 +322,12 @@ def supprimer_session(
     la base qui le garantit. On ne supprime jamais ligne par ligne dans plusieurs tables — une
     erreur au milieu laisserait des orphelins, et personne ne s'en apercevrait.
 
-    L'effacement est protégé par le jeton, contrairement à la lecture : n'importe qui peut
-    regarder, personne ne peut effacer sans le droit.
+    **Pourquoi le garde-fou local et non le jeton ?** Pour la même raison que la capture :
+    le bouton vit dans le navigateur, et lui faire porter le jeton obligerait à l'écrire dans
+    la page — un secret exposé cesse d'être un secret. Effacer est une action sur cette
+    machine, depuis cette machine.
     """
+    depuis_la_machine(request)
     try:
         supprimees = stockage.supprimer_session(identifiant)
     except ValueError as erreur:

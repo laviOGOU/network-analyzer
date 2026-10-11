@@ -349,6 +349,39 @@
       const periode = document.createElement("span");
       periode.textContent = `${formaterHeure(session.debut)} → ${formaterHeure(session.dernier)}`;
       item.append(identifiant, agent, volume, periode);
+      // Supprimer une capture. La confirmation est obligatoire : l'effacement est definitif,
+      // et il emporte les paquets, communications et alertes de la session. Un clic de trop
+      // ne doit pas vider deux heures de capture.
+      const supprimer = document.createElement("button");
+      supprimer.type = "button";
+      supprimer.className = "supprimer-session";
+      supprimer.textContent = "Supprimer";
+      supprimer.title = "Effacer cette capture et tout ce qu'elle contient";
+      supprimer.addEventListener("click", async () => {
+        const etiquette = String(session.session || "").slice(0, 8);
+        if (!window.confirm(`Supprimer la capture ${etiquette} ?\n\n`
+              + "Ses paquets, communications et alertes seront effaces. Cette action est definitive.")) {
+          return;
+        }
+        supprimer.disabled = true;
+        supprimer.textContent = "Suppression...";
+        try {
+          const r = await fetch(`/api/v1/sessions/${encodeURIComponent(session.session)}`,
+                                { method: "DELETE", headers: { Accept: "application/json" } });
+          if (!r.ok) {
+            const detail = await r.json().catch(() => ({}));
+            throw new Error(detail.detail || `refus du serveur (${r.status})`);
+          }
+          item.remove();
+          dire(`Capture ${etiquette} supprimee.`);
+          charger();                       // recharge paquets ET sessions
+        } catch (erreur) {
+          supprimer.disabled = false;
+          supprimer.textContent = "Supprimer";
+          dire(`Suppression impossible : ${erreur.message}`);
+        }
+      });
+      item.appendChild(supprimer);
       el.sessions.appendChild(item);
     }
   }
