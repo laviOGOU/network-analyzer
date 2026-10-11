@@ -20,7 +20,7 @@ router = APIRouter(tags=["capture"])
 LOCALES = {"127.0.0.1", "::1", "localhost", "::ffff:127.0.0.1"}
 
 
-def depuis_la_machine(request: Request) -> None:
+def depuis_la_machine(request: Request, action: str = "lancer une capture") -> None:
     """Refuse un lancement de capture venant d'ailleurs que du poste lui-même.
 
     **Pourquoi pas le jeton d'agent, comme pour l'ingestion ?** Parce que le bouton est dans
@@ -33,7 +33,8 @@ def depuis_la_machine(request: Request) -> None:
     if hote not in LOCALES:
         raise HTTPException(
             status_code=403,
-            detail="Une capture ne peut être lancée que depuis la machine qui la réalise.",
+            detail=f"Impossible de {action} depuis une autre machine : agissez depuis le "
+                   "poste qui héberge FlowScope.",
         )
 
 

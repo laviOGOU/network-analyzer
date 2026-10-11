@@ -327,7 +327,7 @@ def supprimer_session(
     la page — un secret exposé cesse d'être un secret. Effacer est une action sur cette
     machine, depuis cette machine.
     """
-    depuis_la_machine(request)
+    depuis_la_machine(request, "supprimer une capture")
     try:
         supprimees = stockage.supprimer_session(identifiant)
     except ValueError as erreur:

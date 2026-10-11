@@ -1348,8 +1348,19 @@ main {
   .bouton:active { transform: none; }
 }
 
-/* Sur un écran étroit, le tableau reste lisible : on masque les colonnes les moins
-   utiles au profit des plus informatives, plutôt que de tout comprimer. */
+/* Le tableau tient dans la largeur, par paliers.
+   Le débordement horizontal est interdit — la page ne doit jamais défiler de côté. On retire
+   donc les colonnes par ordre d'utilité décroissante, en commençant par TTL : c'est du jargon
+   pour qui n'est pas réseau, et sa valeur reste consultable dans le détail d'une couche. */
+@media (max-width: 1200px) {
+  .tableau th:nth-child(7), .tableau td:nth-child(7) { display: none; }
+}
+
+@media (max-width: 960px) {
+  .tableau th:nth-child(7), .tableau td:nth-child(7),
+  .tableau th:nth-child(6), .tableau td:nth-child(6) { display: none; }
+}
+
 @media (max-width: 640px) {
   .tableau th:nth-child(6), .tableau td:nth-child(6),
   .tableau th:nth-child(7), .tableau td:nth-child(7) { display: none; }
