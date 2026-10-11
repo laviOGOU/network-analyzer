@@ -1409,3 +1409,21 @@ main {
 .fenetre__formats { display: flex; flex-wrap: wrap; gap: .5rem 1rem; border: 0; margin: 0; }
 .fenetre__formats label { display: inline-flex; align-items: center; gap: .35rem; cursor: pointer; }
 .fenetre__formats input { accent-color: var(--accent); }
+
+/* Adresse surmontee de son nom ------------------------------------------------------------
+   Le nom se place au-dessus, plus lisible, et l'adresse reste dessous en retrait : c'est elle
+   qui fait foi, mais elle n'a plus a etre la premiere chose qu'on lit. Les chiffres sont en
+   chasse fixe tabulaire pour que les colonnes s'alignent d'une ligne a l'autre. */
+.adresse-nom {
+  display: block;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.adresse-valeur {
+  display: block;
+  font-family: var(--police-mono, monospace);
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
+  overflow-wrap: anywhere;
+}

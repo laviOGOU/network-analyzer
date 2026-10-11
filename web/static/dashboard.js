@@ -261,6 +261,28 @@
     }
   }
 
+  /**
+   * Écrit une adresse, surmontée du nom qui lui est connu.
+   *
+   * Le nom s'AJOUTE, il ne remplace jamais l'adresse : l'adresse est la seule chose réellement
+   * observée, et c'est elle qui permet de vérifier. Un affichage qui ne montrerait que
+   * « exemple.ci » rendrait impossible le contrôle de ce qui est passé sur le réseau ; un
+   * affichage qui ne montre que des chiffres est illisible. Les deux, l'un au-dessus de l'autre.
+   */
+  function remplirAdresse(cellule, adresse, nom) {
+    cellule.textContent = "";
+    if (nom) {
+      const ligneNom = document.createElement("span");
+      ligneNom.className = "adresse-nom";
+      ligneNom.textContent = nom;
+      cellule.append(ligneNom);
+    }
+    const ligneAdresse = document.createElement("span");
+    ligneAdresse.className = "adresse-valeur";
+    ligneAdresse.textContent = adresse || "—";
+    cellule.append(ligneAdresse);
+  }
+
   function majTableau(paquets) {
     el.corps.textContent = "";
     if (!paquets.length) {
@@ -281,10 +303,10 @@
       pastille.textContent = paquet.protocole || "inconnu";
       pastille.dataset.protocole = paquet.protocole || "inconnu";
 
-      ligne.querySelector(".col-source").textContent =
-        paquet.ip_source || paquet.mac_source || "—";
-      ligne.querySelector(".col-destination").textContent =
-        paquet.ip_destination || paquet.mac_destination || "—";
+      remplirAdresse(ligne.querySelector(".col-source"),
+                     paquet.ip_source || paquet.mac_source, paquet.nom_a);
+      remplirAdresse(ligne.querySelector(".col-destination"),
+                     paquet.ip_destination || paquet.mac_destination, paquet.nom_b);
       ligne.querySelector(".col-port").textContent =
         paquet.port_destination !== null && paquet.port_destination !== undefined
           ? String(paquet.port_destination) : "—";

@@ -110,6 +110,20 @@ def lister_paquets(
     criteres, ignores = criteres_du_filtre(filtre, "paquets")
     paquets = stockage.paquets(limite=limite, protocole=protocole,
                                session=session, recherche=recherche, filtre=criteres)
+    # Les noms viennent des reponses DNS DEJA conservees : rien n'est interroge a l'exterieur.
+    # `nommer` travaille sur les cles ip_a/ip_b, celles des communications ; un paquet porte
+    # ip_source/ip_destination. On presente donc les deux cotes sous le nom attendu, SANS
+    # toucher aux cles d'origine : l'adresse reste la reference, le nom ne fait que s'ajouter.
+    # Cette liaison manquait ici alors qu'elle existait pour les communications : la liste des
+    # paquets n'affichait que des suites de chiffres.
+    noms = noms_connus(stockage)
+    paquets = [
+        mod_noms.nommer(
+            {**paquet, "ip_a": paquet.get("ip_source"), "ip_b": paquet.get("ip_destination")},
+            noms,
+        )
+        for paquet in paquets
+    ]
     return {
         "paquets": paquets,
         "affiches": len(paquets),
