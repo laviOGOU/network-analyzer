@@ -204,6 +204,28 @@ class Stockage:
         liste.sort(key=lambda d: (d.get("dernier") or "", d.get("debut") or ""), reverse=True)
         return liste[:limite]
 
+    def supprimer_session(self, identifiant: str) -> int:
+        """Supprime une capture et tout ce qu'elle a produit.
+
+        Les paquets, communications et détections de cette session partent avec elle. On les
+        retire explicitement au lieu de compter sur un lien implicite : ici, rien ne garantit
+        qu'une ligne appartienne encore à une session vivante, sinon ce nettoyage.
+
+        Rend 1 si la capture existait, 0 sinon. Un zéro n'est pas un échec : c'est le compte
+        rendu d'un identifiant déjà disparu.
+        """
+        with self._verrou:
+            if self._sessions.pop(identifiant, None) is None:
+                return 0
+            self._paquets[:] = [p for p in self._paquets if p.get("session") != identifiant]
+            for index in [c for c, v in self._communications.items()
+                          if v.get("session") == identifiant]:
+                del self._communications[index]
+            for index in [d for d, v in self._detections.items()
+                          if v.get("session") == identifiant]:
+                del self._detections[index]
+        return 1
+
     def vider(self) -> None:
         """Remet le tampon et les compteurs à zéro. Utilisé par les tests.
 

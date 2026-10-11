@@ -309,6 +309,30 @@ def statistiques(stockage: Annotated[Stockage, Depends(obtenir_stockage)]) -> di
     return stockage.statistiques()
 
 
+@router.delete("/sessions/{identifiant}", summary="Supprimer une capture")
+def supprimer_session(
+    identifiant: str,
+    stockage: Annotated[Stockage, Depends(obtenir_stockage)],
+    _jeton: Annotated[None, Depends(verifier_jeton)],
+) -> dict[str, Any]:
+    """Supprime une capture et tout ce qu'elle contient.
+
+    Les paquets, communications, alertes et explications partent avec elle, par cascade : c'est
+    la base qui le garantit. On ne supprime jamais ligne par ligne dans plusieurs tables — une
+    erreur au milieu laisserait des orphelins, et personne ne s'en apercevrait.
+
+    L'effacement est protégé par le jeton, contrairement à la lecture : n'importe qui peut
+    regarder, personne ne peut effacer sans le droit.
+    """
+    try:
+        supprimees = stockage.supprimer_session(identifiant)
+    except ValueError as erreur:
+        raise HTTPException(status_code=400, detail=str(erreur)) from erreur
+    if not supprimees:
+        raise HTTPException(status_code=404, detail="Cette capture n'existe plus.")
+    return {"supprimees": supprimees, "identifiant": identifiant}
+
+
 @router.get("/sessions", summary="Sessions de capture connues")
 def lister_sessions(stockage: Annotated[Stockage, Depends(obtenir_stockage)]) -> dict[str, Any]:
     """Sessions reçues depuis le démarrage, la plus récente d'abord.

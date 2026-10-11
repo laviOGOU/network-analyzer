@@ -647,6 +647,35 @@ class StockagePostgres:
                 curseur.execute("TRUNCATE analyzer.capture_sessions CASCADE")
             connexion.commit()
 
+    def supprimer_session(self, identifiant: str) -> int:
+        """Supprime une capture et tout ce qui en dépend.
+
+        Les communications, paquets, alertes et explications suivent par cascade — c'est la
+        base qui le garantit, pas le code appelant. On ne supprime donc jamais ligne par
+        ligne dans plusieurs tables : une erreur au milieu laisserait des orphelins.
+
+        Rend le nombre de sessions effectivement supprimées. Un « 0 » n'est pas un échec :
+        c'est le compte rendu honnête d'un identifiant qui n'existait plus.
+        """
+        try:
+            uuid.UUID(str(identifiant))
+        except (ValueError, AttributeError, TypeError) as erreur:
+            # Un identifiant mal formé doit être refusé ici, clairement, plutôt que de
+            # remonter en erreur SQL incompréhensible jusqu'à l'utilisateur.
+            raise ValueError(f"Identifiant de capture invalide : {identifiant!r}") from erreur
+
+        with self._verrou, self._connexion() as connexion:
+            with connexion.cursor() as curseur:
+                curseur.execute(
+                    "DELETE FROM analyzer.capture_sessions WHERE id = %s::uuid",
+                    (str(identifiant),),
+                )
+                supprimees = curseur.rowcount
+            connexion.commit()
+        if supprimees:
+            logger.info("Capture supprimée : %s", identifiant)
+        return supprimees
+
     def purger(self, jours: int = 30) -> int:
         """Supprime les sessions plus anciennes que la durée de conservation.
 
