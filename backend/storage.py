@@ -217,7 +217,13 @@ class Stockage:
         with self._verrou:
             if self._sessions.pop(identifiant, None) is None:
                 return 0
-            self._paquets[:] = [p for p in self._paquets if p.get("session") != identifiant]
+            # `_paquets` est un deque borne (`maxlen`) : il n'accepte pas l'affectation par
+            # tranche. On le reconstruit en conservant sa borne — l'oublier ferait disparaitre
+            # le plafond de memoire, qui est justement la raison d'etre de cette file.
+            self._paquets = deque(
+                (p for p in self._paquets if p.get("session") != identifiant),
+                maxlen=self._paquets.maxlen,
+            )
             for index in [c for c, v in self._communications.items()
                           if v.get("session") == identifiant]:
                 del self._communications[index]
