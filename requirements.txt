@@ -27,7 +27,7 @@ uvicorn[standard]>=0.32,<1
 pydantic>=2.9,<3
 
 httpx>=0.27,<1
-jinja2>=3.1,<4
+jinja2==3.1.3
 # LE PILOTE POSTGRESQL. Il manquait ici : installe dans le venv par uv, jamais declare, donc
 # absent de l'image de production. L'application demarrait quand meme et echouait a la
 # premiere requete touchant la base - un 500 sans explication. Un paquet installe n'est pas
