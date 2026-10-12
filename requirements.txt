@@ -34,7 +34,7 @@ jinja2>=3.1,<4
 # un paquet declare, et seul le fichier compte pour une image construite ailleurs.
 # En variante binaire : aucune compilation, donc une image qui se construit en une minute.
 psycopg[binary]>=3.2,<4
-python-dotenv>=1.0,<2
+python-dotenv==1.2.2
 
 pytest>=8.0,<10
 
