@@ -34,3 +34,6 @@ EXPOSE 8080
 
 # `${PORT:-8080}` : le port de Railway s'il existe, 8080 sinon.
 CMD ["sh", "-c", "ANALYZER_PORT=${PORT:-8080} python -m backend.main"]
+
+# Added by Hackaiz: never run the container as root.
+USER 10001
