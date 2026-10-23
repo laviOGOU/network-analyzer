@@ -20,6 +20,9 @@
 #  Scapy qui s'appuie sur le pilote Npcap déjà installé sur la machine.
 # -----------------------------------------------------------------------------
 
+# ATTENTION : scapy est affecté par une vulnérabilité d'exécution de code à distance (GHSA-cq46-m9x9-j8w2)
+# lors du chargement de fichiers de session. Aucune version corrigée n'est disponible. Assurez-vous que
+# votre application ne traite pas de fichiers de session `.scapy` provenant de sources non fiables.
 scapy>=2.5.1,<3
 
 fastapi>=0.115,<1
